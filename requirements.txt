@@ -1,0 +1,6 @@
+flask
+firebase-admin
+#RPi.GPIO
+#mfrc522
+python-kasa
+schedule

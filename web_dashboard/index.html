@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UCuenca TEC - Dashboard IoT</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" width="32" height="32">
+                        <path fill="currentColor" d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2>UCuenca <span>TEC</span></h2>
+                    <p>Gestión Inteligente de Aula</p>
+                </div>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-target="panel-monitoreo">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M7,10H9V17H7V10M11,7H13V17H11V7M15,13H17V17H15V13Z"/></svg>
+                    <span>Monitoreo General</span>
+                </button>
+                <button class="nav-btn" data-target="panel-inventario">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M20,18c1.1,0,2-0.9,2-2V6c0-1.1-0.9-2-2-2H4C2.9,4,2,4.9,2,6v10c0,1.1,0.9,2,2,2H20z M4,6h16v10H4V6z M7,9h10v2H7V9z M7,13h7v2H7V13z"/></svg>
+                    <span>Inventario de Aula</span>
+                </button>
+                <button class="nav-btn" data-target="panel-qr">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M3 3H9V9H3V3M5 5V7H7V5H5M3 15H9V21H3V15M5 17V19H7V17H5M15 3H21V9H15V3M17 5V7H19V5H17M15 15H17V17H15V15M17 17H19V19H17V17M19 15H21V17H19V15M15 19H17V21H15V19M19 19H21V21H19V19M11 11H13V13H11V11M11 3H13V9H11V3M3 11H9V13H3V11M15 11H21V13H15V11M11 15H13V21H11V15Z"/></svg>
+                    <span>Alta y Etiquetado QR</span>
+                </button>
+                <button class="nav-btn" data-target="panel-accesos">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M7,6H17V8H7V6M7,10H17V12H7V10M7,14H12V16H7V14Z"/></svg>
+                    <span>Historial de Accesos</span>
+                </button>
+                <button class="nav-btn" data-target="panel-usuarios">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z"/></svg>
+                    <span>Gestión de Docentes</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="system-status">
+                    <div class="status-header">
+                        <span class="status-pulse-green"></span>
+                        <p>Estado: <strong>Servidor Activo</strong></p>
+                    </div>
+                    <p id="system-time">--:--:--</p>
+                </div>
+                <div class="sim-panel glass-panel">
+                    <h4>🛠️ Modo Desarrollador</h4>
+                    <button class="seed-btn" id="btnSeedData">⚡ Inyectar Datos Semilla</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- PANEL: MONITOREO Y ALERTAS -->
+            <section id="panel-monitoreo" class="panel active">
+                <header class="panel-header">
+                    <h1>Monitoreo en Tiempo Real</h1>
+                    <p>Estado dinámico de seguridad, flujo e iluminación del aula</p>
+                </header>
+                
+                <div class="metrics-grid">
+                    <!-- Tarjeta: Personas -->
+                    <div class="metric-card glass-panel card-blue">
+                        <div class="metric-icon">
+                            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M16 13c-2.28 0-6.01 1.12-6.75 3.32C10.66 17.55 12.82 18 15 18c2.18 0 4.34-.45 5.75-1.32-.74-2.2-4.47-3.32-6.75-3.32M15 12c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3M6 13c-.93 0-2.5.46-3.12 1.33C4.03 15.15 5.5 15.5 7 15.5c.34 0 .68-.02 1.02-.06C7.38 14.53 6.64 13.62 6 13m1-1c1.38 0 2.5-1.12 2.5-2.5S8.38 7 7 7 4.5 8.12 4.5 9.5 5.62 12 7 12m8-7.5c.97 0 1.75-.78 1.75-1.75S15.97 1 15 1s-1.75.78-1.75 1.75S14.03 4.5 15 4.5Z"/></svg>
+                        </div>
+                        <div class="metric-details">
+                            <h3>Ocupación Actual</h3>
+                            <div class="metric-value" id="countPersonas">0</div>
+                            <p class="metric-sub">Personas en el aula</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Tarjeta: Seguridad PIR -->
+                    <div class="metric-card glass-panel card-secure" id="cardAlerta">
+                        <div class="metric-icon" id="iconAlerta">
+                            <svg viewBox="0 0 24 24" width="24" height="24" id="svgAlerta"><path fill="currentColor" d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z"/></svg>
+                        </div>
+                        <div class="metric-details">
+                            <h3>Seguridad (PIR)</h3>
+                            <div class="metric-value" id="estadoPir">Seguro</div>
+                            <p class="metric-sub" id="subAlerta">No se detecta movimiento</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Tarjeta: Chapa -->
+                    <div class="metric-card glass-panel card-lock" id="cardChapa">
+                        <div class="metric-icon" id="iconChapa">
+                            <!-- SVG Candado Cerrado -->
+                            <svg viewBox="0 0 24 24" width="24" height="24" class="lock-closed"><path fill="currentColor" d="M18,8H17V6A5,5 0 0,0 7,6V8H6A2,2 0 0,0 4,10V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V10A2,2 0 0,0 18,8M9,6A3,3 0 0,1 15,6V8H9V6M18,20H6V10H18V20M12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13Z"/></svg>
+                        </div>
+                        <div class="metric-details">
+                            <h3>Cerrojo Eléctrico</h3>
+                            <div class="metric-value" id="estadoChapa">CERRADA</div>
+                            <p class="metric-sub">Puerta asegurada</p>
+                        </div>
+                    </div>
+
+                    <!-- Tarjeta: Foco -->
+                    <div class="metric-card glass-panel card-light" id="cardFoco">
+                        <div class="metric-icon" id="iconFoco">
+                            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21H9M12,4A5,5 0 0,1 17,9C17,11.04 15.9,12.78 14.26,13.68C14.07,13.78 13.9,13.95 13.82,14.17C13.75,14.38 13.75,14.62 13.82,14.83C13.9,15 14,15.15 14,15.32V16H10V15.32C10,15.15 10.1,15 10.18,14.83C10.25,14.62 10.25,14.38 10.18,14.17C10.1,13.95 9.93,13.78 9.74,13.68C8.1,12.78 7,11.04 7,9A5,5 0 0,1 12,4Z"/></svg>
+                        </div>
+                        <div class="metric-details">
+                            <h3>Iluminación Inteligente</h3>
+                            <div class="metric-value" id="estadoFoco">APAGADO</div>
+                            <p class="metric-sub" id="subFoco">Luz artificial desactivada</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gráfica de Tráfico -->
+                <div class="chart-container glass-panel">
+                    <div class="chart-header">
+                        <h3>Gráfico de Afluencia en Tiempo Real</h3>
+                        <span class="live-tag"><span class="pulse"></span> EN VIVO</span>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="traficoChart"></canvas>
+                    </div>
+                </div>
+            </section>
+ 
+            <!-- PANEL: INVENTARIO -->
+            <section id="panel-inventario" class="panel">
+                <header class="panel-header">
+                    <h1>Inventario Físico del Aula</h1>
+                    <p>Control exacto del material de laboratorio e instrumental en el aula</p>
+                </header>
+                <div class="table-container glass-panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Código QR (ID)</th>
+                                <th>Nombre del Material</th>
+                                <th>Stock Disponible</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaInventario">
+                            <!-- Datos cargados dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- PANEL: GENERAR QR -->
+            <section id="panel-qr" class="panel">
+                <header class="panel-header">
+                    <h1>Alta de Nuevo Material</h1>
+                    <p>Registra equipamiento y genera su etiqueta con código QR</p>
+                </header>
+                <div class="form-grid">
+                    <div class="form-container glass-panel">
+                        <h2>Datos del Producto</h2>
+                        <div class="input-group">
+                            <label>Identificador Único (ID)</label>
+                            <input type="text" id="prodId" placeholder="Ej. QR_MULTIMETRO_A">
+                        </div>
+                        <div class="input-group">
+                            <label>Nombre del Producto</label>
+                            <input type="text" id="prodNombre" placeholder="Ej. Osciloscopio Digital 100MHz">
+                        </div>
+                        <div class="input-group">
+                            <label>Cantidad Inicial (Stock)</label>
+                            <input type="number" id="prodStock" placeholder="Ej. 5">
+                        </div>
+                        <button class="primary-btn" id="btnGuardarProd">✨ Registrar y Generar Etiqueta</button>
+                    </div>
+                    
+                    <div class="qr-result-area glass-panel" id="qrResultArea" style="display:none;">
+                        <h2>Etiqueta QR Generada</h2>
+                        <p class="qr-instructions">Esta etiqueta puede imprimirse y pegarse físicamente sobre el producto.</p>
+                        <div class="printable-badge">
+                            <div class="badge-header">UCUENCA - INVENTARIO IOT</div>
+                            <div id="qrPreview"></div>
+                            <div class="badge-footer">
+                                <span id="qrLabel">ID_PROD</span>
+                            </div>
+                        </div>
+                        <button class="secondary-btn" id="btnPrintQR">
+                            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M18,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z"/></svg>
+                            Imprimir Etiqueta
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: ACCESOS RFID -->
+            <section id="panel-accesos" class="panel">
+                <header class="panel-header">
+                    <h1>Historial de Accesos RFID</h1>
+                    <p>Bitácora de entradas, salidas y permanencia de docentes responsables</p>
+                </header>
+                <div class="table-container glass-panel">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Docente</th>
+                                <th>Rol</th>
+                                <th>Ingreso</th>
+                                <th>Salida</th>
+                                <th>Permanencia</th>
+                                <th>Acompañantes</th>
+                                <th>Extracción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaAccesos">
+                            <!-- Datos cargados dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- PANEL: GESTIÓN DE DOCENTES (USUARIOS RFID) -->
+            <section id="panel-usuarios" class="panel">
+                <header class="panel-header">
+                    <h1>Gestión de Docentes (RFID)</h1>
+                    <p>Administración y registro de tarjetas RFID autorizadas en el aula</p>
+                </header>
+                <div class="form-grid">
+                    <!-- Formulario de Registro de Usuario -->
+                    <div class="form-container glass-panel">
+                        <h2>Registrar Nuevo Docente</h2>
+                        <div class="input-group">
+                            <label>UID de Tarjeta RFID (Identificador Físico)</label>
+                            <input type="text" id="userUid" placeholder="Ej. 2938472910">
+                        </div>
+                        <div class="input-group">
+                            <label>Nombre Completo</label>
+                            <input type="text" id="userNombre" placeholder="Ej. Ing. Juan Pérez">
+                        </div>
+                        <div class="input-group">
+                            <label>Rol / Permiso</label>
+                            <input type="text" id="userRol" placeholder="Ej. Docente, Administrador, Técnico">
+                        </div>
+                        <button class="primary-btn" id="btnGuardarUsuario">🔑 Autorizar Tarjeta RFID</button>
+                    </div>
+                    
+                    <!-- Tabla de Usuarios Autorizados -->
+                    <div class="table-container glass-panel">
+                        <h2>Personal con Acceso Autorizado</h2>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>UID Tarjeta</th>
+                                    <th>Nombre del Docente</th>
+                                    <th>Rol</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaUsuarios">
+                                <!-- Datos cargados dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <!-- Script de Inicialización y Lógica -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
