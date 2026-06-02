@@ -45,7 +45,17 @@ GPIO.setwarnings(False)
 GPIO.setup(PIN_RELE_CHAPA, GPIO.OUT, initial=GPIO.LOW)
 GPIO.setup(PIN_PULSADOR_SALIDA, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-reader = SimpleMFRC522()
+try:
+    reader = SimpleMFRC522()
+    print("[RFID] Lector RFID inicializado correctamente.")
+except Exception as e:
+    print(f"[WARNING] No se pudo inicializar RFID (hardware no disponible): {e}")
+    print("[WARNING] El sistema seguira funcionando sin lectura RFID.")
+    class MockRFIDFallback:
+        def read(self):
+            time.sleep(60)  # Espera larga para no consumir CPU
+            return None, None
+    reader = MockRFIDFallback()
 
 # --- CONFIGURACIÓN FIREBASE ---
 try:
@@ -91,7 +101,12 @@ def boton_salida_callback(channel):
     threading.Thread(target=abrir_chapa).start()
 
 # Configurar interrupción para el botón
-GPIO.add_event_detect(PIN_PULSADOR_SALIDA, GPIO.FALLING, callback=boton_salida_callback, bouncetime=500)
+try:
+    GPIO.add_event_detect(PIN_PULSADOR_SALIDA, GPIO.FALLING, callback=boton_salida_callback, bouncetime=500)
+    print("[GPIO] Deteccion de flanco en pulsador configurada.")
+except Exception as e:
+    print(f"[WARNING] No se pudo configurar event_detect en GPIO {PIN_PULSADOR_SALIDA}: {e}")
+    print("[WARNING] El pulsador fisico no funcionara, pero el sistema continua.")
 
 # --- UTILIDADES FIREBASE ---
 def actualizar_monitoreo(datos):

@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias para compilar librerías de hardware
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements y dependencias específicas de hardware de RPi
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir RPi.GPIO spidev mfrc522
+
+# Copiar los scripts de ejecución y configuración
+COPY main_control.py .
+COPY credentials.py .
+COPY google-services.json .
+
+EXPOSE 5000
+
+CMD ["python", "main_control.py"]
