@@ -2,6 +2,11 @@
 
 Este documento detalla la configuración del sistema operativo de la Raspberry Pi 4B (con Arch Linux/EndeavourOS), la red VPN de Netbird, el Punto de Acceso (Access Point), la configuración de Firebase y las conexiones del microcontrolador ESP32 NodeMCU-32S.
 
+> [!IMPORTANT]
+> **Las credenciales se encuentran en un archivo separado:** [`credentials.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/credentials.py)  
+> **Cliente SSH en Python:** [`ssh_raspberry.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/ssh_raspberry.py)  
+> ⚠️ Añade `credentials.py` a tu `.gitignore` para no subir claves al repositorio.
+
 ---
 
 ## 🖥️ 1. Raspberry Pi 4B - Información General y Sistema
@@ -12,10 +17,9 @@ Se extrajo la información directamente del sistema operativo alojado en la Rasp
 *   **Versión del Kernel:** `Linux raspberryfv 6.18.32-2-rpi #1 SMP PREEMPT Fri May 22 17:11:05 UTC 2026 aarch64 GNU/Linux`
 *   **Arquitectura:** `aarch64` (ARM 64-bit)
 *   **Nombre de Host (Hostname):** `raspberryfv`
-*   **Acceso SSH local:**
-    *   **Comando:** `ssh user@raspberryfv.nb` (o a través de su IP local/VPN)
-    *   **Usuario:** `user`
-    *   **Contraseña:** `taipt`
+*   **Acceso SSH local:** Ver variables `SSH_HOST`, `SSH_USER`, `SSH_PASSWORD` en [`credentials.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/credentials.py)
+    *   **Comando rápido:** `ssh user@raspberryfv.nb`
+    *   **Cliente Python:** ejecutar [`ssh_raspberry.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/ssh_raspberry.py)
 
 ---
 
@@ -25,15 +29,28 @@ La Raspberry Pi está configurada dentro de una red privada mallada gestionada p
 
 *   **Cliente NetBird:** versión `0.71.4` (Daemon y CLI)
 *   **Interfaz de Red:** `wt0` (túnel WireGuard)
-*   **Dirección IP VPN (Netbird IP):** `100.68.45.140/16`
+*   **Setup Key (Red Activa):** `AD8D21D2-4620-45FE-8AB7-D171F6E8FE18`
 *   **Nombre de Dominio (FQDN):** `raspberryfv.netbird.cloud`
 *   **Servicio de Control:** `netbird.service` (habilitado y corriendo activamente)
 
 > [!NOTE]
-> Puedes acceder por SSH a la Raspberry Pi usando directamente su IP de Netbird desde tu computadora (siempre que tu computadora también esté conectada a la misma cuenta de Netbird):
-> ```bash
-> ssh user@100.68.45.140
-> ```
+> Puedes acceder por SSH a la Raspberry Pi usando su IP de Netbird desde tu computadora (siempre que tu computadora también esté conectada a la misma red de Netbird). Verifica la IP actual con `netbird status` tras la reconexión.
+
+### 🔄 Cambiar de Red (Setup Key):
+
+> [!CAUTION]
+> Si accedes por SSH a través de la IP VPN de Netbird, **perderás la sesión** al ejecutar `netbird down`. Asegúrate de tener acceso local o por IP física de red local antes de proceder.
+
+```bash
+# 1. Desconectar de la red Netbird actual
+sudo netbird down
+
+# 2. Reconectarse con el nuevo Setup Key (nueva red)
+sudo netbird up --setup-key AD8D21D2-4620-45FE-8AB7-D171F6E8FE18
+
+# 3. Verificar el nuevo estado y obtener la nueva IP VPN
+netbird status
+```
 
 ### Comandos Útiles de Netbird:
 ```bash
@@ -52,9 +69,10 @@ sudo systemctl stop netbird
 Para comunicar el ESP32 con la Raspberry Pi a través de MQTT de forma local, la Raspberry Pi actúa como un enrutador inalámbrico emitiendo un punto de acceso (Access Point).
 
 ### Credenciales de la Red Wifi:
-*   **Nombre de Red (SSID):** `ESP32_MQTT_AP`
-*   **Contraseña (WPA2-PSK):** `taipt_iot_2026`
-*   **IP de la Raspberry Pi en la red AP (Puerta de Enlace / Broker IP):** `10.42.0.1`
+Ver variables `AP_SSID`, `AP_PASSWORD`, `AP_GATEWAY_IP` en [`credentials.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/credentials.py)
+
+*   **SSID:** `ESP32_MQTT_AP`
+*   **IP Gateway / Broker:** `10.42.0.1`
 
 ### ¿Cómo está implementado?
 El Access Point está gestionado nativamente por **NetworkManager** mediante un perfil de conexión inalámbrico compartido. 
@@ -127,8 +145,9 @@ ss -tulpn | grep 1883
 
 El sistema centraliza las lecturas de los sensores en tiempo real y gestiona los accesos a través de Firebase Realtime Database.
 
-*   **Cuenta de Consola Firebase:** `jomayra.valdez6@ucuenca.edu.ec`
-*   **Nombre del Proyecto:** `proyecto-grado`
+Ver variables `FIREBASE_EMAIL`, `FIREBASE_PROJECT`, `FIREBASE_DATABASE_URL` en [`credentials.py`](file:///c:/Users/ASUS/Documents/complexivo/Proyecto_grado/credentials.py)
+
+*   **Proyecto:** `proyecto-grado`
 *   **URL de la Base de Datos:** `https://proyecto-grado-default-rtdb.firebaseio.com/`
 
 ### Configuración del Backend (Python en RPi):

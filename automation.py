@@ -2,7 +2,26 @@ import asyncio
 import schedule
 import time
 import datetime
-import RPi.GPIO as GPIO
+try:
+    import RPi.GPIO as GPIO
+except ImportError:
+    class MockGPIO:
+        BCM = 'BCM'
+        IN = 'IN'
+        OUT = 'OUT'
+        @staticmethod
+        def setmode(mode):
+            pass
+        @staticmethod
+        def setwarnings(flag):
+            pass
+        @staticmethod
+        def setup(pin, mode):
+            pass
+        @staticmethod
+        def input(pin):
+            return 0
+    GPIO = MockGPIO
 from kasa import Discover, SmartBulb
 import firebase_admin
 from firebase_admin import credentials, db
