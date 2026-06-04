@@ -1,6 +1,8 @@
 import time
 import datetime
 import threading
+import os
+import subprocess
 from flask import Flask, request, jsonify
 import firebase_admin
 from firebase_admin import credentials, db
@@ -162,6 +164,8 @@ def procesar_rfid(uid):
             ref_accesos.push({
                 "docente": nombre,
                 "rol": rol,
+                "metodo_acceso": "rfid",
+                "codigo_usado": uid,
                 "hora_ingreso": estado_actual["hora_ingreso_encargado"],
                 "hora_salida": ahora_str,
                 "tiempo_permanencia_min": minutos,
@@ -221,8 +225,176 @@ def recibir_sensores():
             })
         else:
             print("[PIR] Movimiento detectado normal.")
+    
+    elif evento == "nivel_luz":
+        valor_ldr = data.get("valor_ldr", 0)
+        nivel_luz = data.get("nivel_luz", "N/A")
+        print(f"[LDR] Luz: {valor_ldr} ({nivel_luz})")
+        actualizar_monitoreo({
+            "valor_ldr": valor_ldr,
+            "nivel_luz": nivel_luz
+        })
             
     return jsonify({"status": "ok"}), 200
+
+
+# ────────────────────────────────────────────────────────────────────────────────────────
+# ENDPOINT DE ACCESO POR TECLADO (para el otro grupo que usa teclado numérico)
+# ────────────────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/acceso_teclado', methods=['POST'])
+def acceso_teclado():
+    """
+    Endpoint para registrar accesos por teclado numérico.
+    El otro grupo envía POST con: {"codigo": "1234", "nombre": "Prof. Juan"}
+    """
+    data = request.json
+    if not data:
+        return jsonify({"error": "No JSON"}), 400
+    
+    codigo = data.get("codigo", "")
+    nombre = data.get("nombre", "Usuario Teclado")
+    ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    print(f"[TECLADO] Acceso por teclado: {nombre} (código: {codigo})")
+    
+    # Registrar en la tabla compartida de accesos
+    ref_accesos = db.reference('accesos')
+    ref_accesos.push({
+        "docente": nombre,
+        "metodo_acceso": "teclado",
+        "codigo_usado": codigo,
+        "hora_ingreso": ahora_str,
+        "hora_salida": None,
+        "tiempo_permanencia_min": 0,
+        "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
+        "saca_producto": False,
+        "producto_extraido_id": ""
+    })
+    
+    # Abrir la puerta
+    threading.Thread(target=abrir_chapa).start()
+    
+    return jsonify({"status": "ok", "mensaje": f"Acceso concedido a {nombre}"}), 200
+
+
+@app.route('/api/acceso_teclado/salida', methods=['POST'])
+def salida_teclado():
+    """
+    Endpoint para registrar salidas por teclado.
+    POST con: {"codigo": "1234", "nombre": "Prof. Juan"}
+    """
+    data = request.json
+    if not data:
+        return jsonify({"error": "No JSON"}), 400
+    
+    codigo = data.get("codigo", "")
+    nombre = data.get("nombre", "Usuario Teclado")
+    ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    print(f"[TECLADO] Salida por teclado: {nombre}")
+    
+    # Buscar el último acceso de este usuario por teclado y actualizar hora de salida
+    ref_accesos = db.reference('accesos')
+    accesos = ref_accesos.order_by_child('docente').equal_to(nombre).get()
+    
+    if accesos:
+        # Encontrar el último registro sin salida
+        for key, acc in reversed(list(accesos.items())):
+            if acc.get('hora_salida') is None:
+                t_ingreso = datetime.datetime.strptime(acc['hora_ingreso'], "%Y-%m-%d %H:%M:%S")
+                t_salida = datetime.datetime.now()
+                minutos = int((t_salida - t_ingreso).total_seconds() / 60)
+                
+                ref_accesos.child(key).update({
+                    "hora_salida": ahora_str,
+                    "tiempo_permanencia_min": minutos
+                })
+                break
+    
+    return jsonify({"status": "ok"}), 200
+
+
+# ────────────────────────────────────────────────────────────────────────────────────────
+# ENDPOINTS DE CONTROL DEL SISTEMA (usados por Node-RED Dashboard)
+# ────────────────────────────────────────────────────────────────────────────────────────
+
+@app.route('/status', methods=['GET'])
+def system_status():
+    """Devuelve el estado actual del sistema. Usado por Node-RED para monitoreo."""
+    try:
+        # Uptime del sistema (con fallback si no existe el comando)
+        uptime = 'N/A'
+        try:
+            result = subprocess.run(['uptime', '-p'], capture_output=True, text=True, timeout=5)
+            uptime = result.stdout.strip() if result.returncode == 0 else 'N/A'
+        except FileNotFoundError:
+            try:
+                with open('/proc/uptime', 'r') as f:
+                    uptime_seconds = float(f.readline().split()[0])
+                    hours = int(uptime_seconds // 3600)
+                    minutes = int((uptime_seconds % 3600) // 60)
+                    uptime = f"up {hours}h {minutes}m"
+            except Exception:
+                uptime = 'N/A'
+        
+        # Temperatura de la CPU (disponible en Raspberry Pi)
+        temp_celsius = None
+        try:
+            with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+                temp_raw = int(f.read().strip())
+                temp_celsius = round(temp_raw / 1000.0, 1)
+        except Exception:
+            pass
+        
+        return jsonify({
+            'status': 'online',
+            'uptime': uptime,
+            'cpu_temp_celsius': temp_celsius,
+            'personas_dentro': estado_actual['personas_dentro_actualmente'],
+            'estado_chapa': estado_actual['estado_chapa'],
+            'alerta_pir': estado_actual['alerta_pir'],
+            'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown_raspberry():
+    """Apaga la Raspberry Pi de forma segura. Llamado desde el dashboard de Node-RED."""
+    print("[SISTEMA] ⚠️  Solicitud de APAGADO recibida desde Node-RED Dashboard.")
+    try:
+        # Programar el apagado con 3 segundos de retardo para que la respuesta HTTP pueda enviarse
+        subprocess.Popen(['sudo', 'shutdown', '-h', '+0'],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+        return jsonify({
+            'status': 'shutting_down',
+            'message': 'Raspberry Pi se apagará en breve.',
+            'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR SHUTDOWN] {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/reboot', methods=['POST'])
+def reboot_raspberry():
+    """Reinicia la Raspberry Pi de forma segura. Llamado desde el dashboard de Node-RED."""
+    print("[SISTEMA] 🔄 Solicitud de REINICIO recibida desde Node-RED Dashboard.")
+    try:
+        subprocess.Popen(['sudo', 'reboot'],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+        return jsonify({
+            'status': 'rebooting',
+            'message': 'Raspberry Pi se reiniciará en breve.',
+            'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 200
+    except Exception as e:
+        print(f"[ERROR REBOOT] {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 def main():
     try:

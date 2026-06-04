@@ -52,7 +52,7 @@ navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         navBtns.forEach(b => b.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
-        
+
         btn.classList.add('active');
         document.getElementById(btn.dataset.target).classList.add('active');
     });
@@ -88,14 +88,14 @@ const traficoChart = new Chart(ctx, {
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-            y: { 
-                beginAtZero: true, 
-                grid: { color: 'rgba(255,255,255,0.03)' }, 
-                ticks: { color: '#94a3b8', stepSize: 1 } 
+            y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(255,255,255,0.03)' },
+                ticks: { color: '#94a3b8', stepSize: 1 }
             },
-            x: { 
-                grid: { display: false }, 
-                ticks: { color: '#94a3b8' } 
+            x: {
+                grid: { display: false },
+                ticks: { color: '#94a3b8' }
             }
         },
         plugins: {
@@ -127,9 +127,9 @@ onValue(ref(db, 'monitoreo_tiempo_real'), (snapshot) => {
         // Personas
         const personas = data.personas_dentro_actualmente !== undefined ? data.personas_dentro_actualmente : 0;
         countPersonas.innerText = personas;
-        
+
         // Gráfica
-        const timeStr = new Date().toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'});
+        const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         updateChart(timeStr, personas);
 
         // Chapa
@@ -206,16 +206,24 @@ onValue(ref(db, 'accesos'), (snapshot) => {
         const keys = Object.keys(data).reverse();
         keys.forEach(key => {
             const acc = data[key];
-            
+
             const tIngreso = acc.hora_ingreso ? acc.hora_ingreso : '--';
             const tSalida = acc.hora_salida ? acc.hora_salida : 'Activo';
             const permanencia = acc.hora_salida ? acc.tiempo_permanencia_min + ' min' : '<span class="badge badge-green">En Aula</span>';
             const sacaProd = acc.saca_producto ? `<span class="badge badge-orange">Extracción (${acc.producto_extraido_id})</span>` : 'Ninguna';
 
+            // Método de acceso (RFID o Teclado)
+            const metodo = acc.metodo_acceso || 'rfid';
+            const metodoBadge = metodo === 'teclado'
+                ? '<span class="badge badge-blue">⌨️ Teclado</span>'
+                : '<span class="badge badge-purple">💳 RFID</span>';
+            const codigoRef = acc.codigo_usado ? `<br><span style="color:var(--text-muted); font-size:0.75rem; font-family:monospace;">${acc.codigo_usado}</span>` : '';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${acc.docente}</strong></td>
-                <td><span style="color:var(--text-muted); font-size:0.85rem;">${acc.rol}</span></td>
+                <td><strong>${acc.docente}</strong>${codigoRef}</td>
+                <td>${metodoBadge}</td>
+                <td><span style="color:var(--text-muted); font-size:0.85rem;">${acc.rol || ''}</span></td>
                 <td>${tIngreso}</td>
                 <td>${tSalida}</td>
                 <td>${permanencia}</td>
@@ -277,7 +285,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
             nombre: nombre,
             rol: rol
         });
-        
+
         userUid.value = '';
         userNombre.value = '';
         userRol.value = '';
@@ -293,8 +301,8 @@ btnGuardarProd.addEventListener('click', async () => {
     const idProd = document.getElementById('prodId').value.trim();
     const nombre = document.getElementById('prodNombre').value.trim();
     const stock = parseInt(document.getElementById('prodStock').value);
-    
-    if(!idProd || !nombre || isNaN(stock)) {
+
+    if (!idProd || !nombre || isNaN(stock)) {
         alert('Por favor, completa todos los campos del material.');
         return;
     }
@@ -305,20 +313,20 @@ btnGuardarProd.addEventListener('click', async () => {
             nombre_producto: nombre,
             stock: stock
         };
-        
+
         await update(ref(db), updates);
-        
+
         // Generar QR visual
         qrPreview.innerHTML = '';
         new QRCode(qrPreview, {
             text: idProd,
             width: 130,
             height: 130,
-            colorDark : "#0f172a",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
         });
-        
+
         qrLabel.innerText = idProd;
         qrResultArea.style.display = 'flex';
 
@@ -326,9 +334,9 @@ btnGuardarProd.addEventListener('click', async () => {
         document.getElementById('prodId').value = '';
         document.getElementById('prodNombre').value = '';
         document.getElementById('prodStock').value = '';
-        
+
         alert('Material registrado exitosamente.');
-    } catch(e) {
+    } catch (e) {
         console.error(e);
         alert('Error al guardar en Firebase.');
     }
@@ -337,7 +345,7 @@ btnGuardarProd.addEventListener('click', async () => {
 // Imprimir QR
 btnPrintQR.addEventListener('click', () => {
     const printContent = document.querySelector('.printable-badge').outerHTML;
-    
+
     // Crear una ventana de impresión limpia
     const printWindow = window.open('', '', 'height=500,width=500');
     printWindow.document.write('<html><head><title>Imprimir Etiqueta</title>');
@@ -352,7 +360,7 @@ btnPrintQR.addEventListener('click', () => {
     printWindow.document.write('</body></html>');
     printWindow.document.close();
     printWindow.focus();
-    
+
     // Ejecutar retraso para cargar el DOM y luego imprimir
     setTimeout(() => {
         printWindow.print();
