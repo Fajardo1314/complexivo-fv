@@ -10,7 +10,7 @@ El sistema utiliza la red del Host de la Raspberry Pi (`network_mode: host` en D
 
 *   **Puerto `80` (Nginx/Web Dashboard)**: Punto de entrada único. Expone la interfaz web y redirige las llamadas API.
 *   **Puerto `5000` (Flask/backend-control)**: Escucha localmente en la Raspberry Pi. Solo es accesible externamente a través de la redirección `/api/` en el puerto `80`.
-*   **Netbird VPN**: Mapea la IP pública de la VPN (`raspberryfv.netbird.cloud` o la IP de red interna asignada) directamente al puerto `80` de la Raspberry Pi.
+*   **Netbird VPN**: Mapea la IP pública de la VPN (`raspberryfv.nb` o la IP de red interna asignada) directamente al puerto `80` de la Raspberry Pi.
 
 ---
 

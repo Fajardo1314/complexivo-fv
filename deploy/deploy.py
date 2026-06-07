@@ -164,7 +164,7 @@ def main():
         print("  [EXITO] Despliegue completado satisfactoriamente.")
         print("  Puedes acceder al Dashboard en:")
         print(f"    - URL Local: http://{SSH_HOST_LOCAL}")
-        print("    - URL VPN (Netbird): http://raspberryfv.netbird.cloud")
+        print("    - URL VPN (Netbird): http://raspberryfv.nb")
         print("=" * 65)
 
     except Exception as e:

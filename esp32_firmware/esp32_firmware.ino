@@ -1,44 +1,3 @@
-/*
- * ═══════════════════════════════════════════════════════════════
- *  ESP32 NodeMCU-32S — Firmware del Aula Inteligente
- * ═══════════════════════════════════════════════════════════════
- *
- *  Funciones:
- *    - Conteo de personas (2 sensores IR de barrera)
- *    - Detección de movimiento (PIR HC-SR501)
- *    - Monitoreo de luz ambiente (LDR en divisor de tensión)
- *    - Comunicación WiFi con la Raspberry Pi (HTTP POST)
- *
- *  Conexión WiFi: Hotspot de la RPi (ESP32_MQTT_AP)
- *  Servidor: http://10.42.0.1:5000/api/sensores
- *
- *  ════════════════════════════════════════════════════════════
- *  DIAGRAMA DE MONTAJE EN EL AULA (vista superior de la puerta):
- *
- *       ┌─────────────────────────────────┐
- *       │            INTERIOR AULA         │
- *       │                                  │
- *       │    ┌──────────────────┐          │
- *       │    │                  │          │
- *  IR1  │←───┤  PUERTA (marco)  ├───→│ IR2  │
- *       │    │                  │          │
- *       │    └──────────────────┘          │
- *       │         ↑                        │
- *       │    Persona entra:                │
- *       │    cruza IR1 → IR2 = INGRESO     │
- *       │    cruza IR2 → IR1 = SALIDA      │
- *       │                                  │
- *       │    PIR: montado arriba del marco │
- *       │    LDR: en el techo/pared,       │
- *       │          expuesto a luz natural  │
- *       └─────────────────────────────────┘
- *
- *  IR1 = GPIO 34 (lado IZQUIERDO del marco, mirando hacia afuera)
- *  IR2 = GPIO 35 (lado DERECHO del marco, mirando hacia afuera)
- *  Separación entre sensores: 15-20 cm, altura: 80-100 cm del suelo
- *  ═══════════════════════════════════════════════════════════════
- */
-
 #include <HTTPClient.h>
 #include <WiFi.h>
 
@@ -182,21 +141,7 @@ void enviarPost(String evento, String extra) {
 // ═══════════════════════════════════════════════════════════════
 //  SENSOR IR — Conteo de personas (Entrada/Salida)
 // ═══════════════════════════════════════════════════════════════
-/*
- *  MONTAJE FÍSICO:
- *
- *  Los dos sensores IR se colocan en el marco de la puerta,
- *  uno a cada lado, separados 15-20 cm, a 80-100 cm del suelo.
- *
- *  IR1 (GPIO 34) = Lado IZQUIERDO (mirando desde afuera hacia adentro)
- *  IR2 (GPIO 35) = Lado DERECHO   (mirando desde afuera hacia adentro)
- *
- *  INGRESO: La persona cruza IR1 primero, luego IR2
- *  SALIDA:  La persona cruza IR2 primero, luego IR1
- *
- *  Los sensores TCRT5000 o de barrera IR dan LOW cuando detectan
- *  un obstáculo (la persona bloquea el rayo IR).
- */
+
 void procesarFlujo() {
   int current_IR1 = digitalRead(PIN_IR1);
   int current_IR2 = digitalRead(PIN_IR2);
@@ -223,7 +168,7 @@ void procesarFlujo() {
   if (time_IR1_triggered > 0 && time_IR2_triggered > time_IR1_triggered) {
     if (time_IR2_triggered - time_IR1_triggered < TIMEOUT_FLUJO) {
       personas_dentro++;
-      Serial.print("[FLUJO] ✅ INGRESO detectado. Personas: ");
+      Serial.print("[FLUJO] INGRESO detectado. Personas: ");
       Serial.println(personas_dentro);
       enviarPost("ingreso");
       last_cruce_time = currentTime;
@@ -235,7 +180,7 @@ void procesarFlujo() {
   else if (time_IR2_triggered > 0 && time_IR1_triggered > time_IR2_triggered) {
     if (time_IR1_triggered - time_IR2_triggered < TIMEOUT_FLUJO) {
       personas_dentro = max(0, personas_dentro - 1);
-      Serial.print("[FLUJO] ❌ SALIDA detectada. Personas: ");
+      Serial.print("[FLUJO] SALIDA detectada. Personas: ");
       Serial.println(personas_dentro);
       enviarPost("salida");
       last_cruce_time = currentTime;
@@ -261,16 +206,7 @@ void procesarFlujo() {
 // ═══════════════════════════════════════════════════════════════
 //  SENSOR PIR — Detección de movimiento
 // ═══════════════════════════════════════════════════════════════
-/*
- *  El PIR HC-SR501 se monta en la parte superior del marco
- *  de la puerta, apuntando hacia el interior del aula.
- *
- *  Envía "movimiento_detectado" al servidor cada vez que
- *  detecta movimiento (con un cooldown de 10 segundos).
- *
- *  El servidor (main_control.py) evalúa si hay personas
- *  dentro y genera una alerta si el aula está vacía.
- */
+
 void procesarPIR() {
   bool pir_state = digitalRead(PIN_PIR) == HIGH;
   unsigned long currentTime = millis();
@@ -288,30 +224,7 @@ void procesarPIR() {
 // ═══════════════════════════════════════════════════════════════
 //  SENSOR LDR — Monitoreo de luz ambiente
 // ═══════════════════════════════════════════════════════════════
-/*
- *  SENSOR RECOMENDADO: LDR (fotoresistencia) + resistencia 10kΩ
- *
- *  CONEXIÓN (divisor de tensión):
- *
- *    3.3V ──── LDR ──┬── GPIO 32 (ADC)
- *                     │
- *                  Resistor 10kΩ
- *                     │
- *    GND ─────────────┘
- *
- *  MONTAJE: En el techo o pared superior del aula,
- *  expuesto a la luz natural y artificial.
- *
- *  VALORES TÍPICOS (ADC 12-bit, 0-4095):
- *    < 500  = Muy oscuro (aula sin luces, noche)
- *    500-1500 = Poca luz (nublado o luces tenues)
- *    1500-3000 = Luz normal (luces encendidas)
- *    > 3000 = Muy iluminado (luz natural directa)
- *
- *  El ESP32 reporta el nivel de luz cada 30 segundos.
- *  El servidor puede usar esto para encender/apagar
- *  automáticamente las luces del aula.
- */
+
 void procesarLuz() {
   unsigned long currentTime = millis();
 
@@ -364,7 +277,7 @@ void conectarWiFi() {
 
   if (WiFi.status() == WL_CONNECTED) {
     wifi_conectado = true;
-    Serial.println("\n[WiFi] ✅ Conectado!");
+    Serial.println("\n[WiFi] Conectado!");
     Serial.print("[WiFi] IP del ESP32: ");
     Serial.println(WiFi.localIP());
     Serial.print("[WiFi] Gateway (RPi): ");
@@ -373,6 +286,6 @@ void conectarWiFi() {
     Serial.println(serverUrl);
   } else {
     wifi_conectado = false;
-    Serial.println("\n[WiFi] ❌ No se pudo conectar. Reintentará en el loop.");
+    Serial.println("\n[WiFi] No se pudo conectar. Reintentará en el loop.");
   }
 }

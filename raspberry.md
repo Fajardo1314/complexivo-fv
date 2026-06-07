@@ -30,7 +30,7 @@ La Raspberry Pi está configurada dentro de una red privada mallada gestionada p
 *   **Cliente NetBird:** versión `0.71.4` (Daemon y CLI)
 *   **Interfaz de Red:** `wt0` (túnel WireGuard)
 *   **Setup Key (Red Activa):** `AD8D21D2-4620-45FE-8AB7-D171F6E8FE18`
-*   **Nombre de Dominio (FQDN):** `raspberryfv.netbird.cloud`
+*   **Nombre de Dominio (FQDN):** `raspberryfv.nb` (zona personalizada .nb en Netbird)
 *   **Servicio de Control:** `netbird.service` (habilitado y corriendo activamente)
 
 > [!NOTE]

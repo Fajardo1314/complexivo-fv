@@ -333,7 +333,7 @@ def print_summary(host):
     print()
     print("  [ESCRITORIO REMOTO] Conexion desde Windows (mstsc)")
     print(f"       1. Abre 'Conexion a Escritorio Remoto' (tecla Win, busca mstsc)")
-    print(f"       2. Equipo: raspberryfv.netbird.cloud  o  {local_host}")
+    print(f"       2. Equipo: raspberryfv.nb  o  {local_host}")
     print(f"       3. Usuario: {SSH_USER}")
     print(f"       4. Contrasena: {SSH_PASSWORD}")
     print(f"       AVISO: Asegurate de tener Netbird conectado en tu PC Windows")

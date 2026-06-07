@@ -38,15 +38,15 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   # ─── Node-RED: Dashboard y automatización visual ───────────────────────────
-  # Acceso: http://raspberryfv.netbird.cloud:1880       (editor)
-  #         http://raspberryfv.netbird.cloud:1880/ui    (dashboard)
+  # Acceso: http://raspberryfv.nb:1880       (editor)
+  #         http://raspberryfv.nb:1880/ui    (dashboard)
   nodered:
     image: nodered/node-red:latest
     container_name: nodered
     restart: unless-stopped
-    network_mode: host          # Comparte IP con la Pi → puede llamar a Flask en 127.0.0.1:5000
-    user: root                  # Necesario para ejecutar comandos del sistema
+    network_mode: host # Comparte IP con la Pi → puede llamar a Flask en 127.0.0.1:5000
+    user: root # Necesario para ejecutar comandos del sistema
     environment:
       - TZ=America/Guayaquil
     volumes:
-      - ./nodered_data:/data    # Flujos, credenciales y módulos persistentes
+      - ./nodered_data:/data # Flujos, credenciales y módulos persistentes
