@@ -304,7 +304,7 @@ def demo_comandos(rpi: RaspberrySSH):
     print("═" * 60)
 
     for nombre, cmd in comandos:
-        print(f"\n▶ {nombre}: {cmd}")
+        print(f"\n {nombre}: {cmd}")
         print("─" * 40)
         salida = rpi.ejecutar(cmd)
         print(salida or "(sin salida)")
