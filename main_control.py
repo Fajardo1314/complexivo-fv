@@ -140,7 +140,9 @@ def rfid_loop():
             print(f"[RFID Error] {e}")
             time.sleep(1)
 
-def procesar_rfid(uid):
+            time.sleep(1)
+
+def registrar_acceso_docente(uid):
     ref_usuarios = db.reference('usuarios')
     usuario = ref_usuarios.child(uid).get()
     
@@ -149,6 +151,9 @@ def procesar_rfid(uid):
     if usuario:
         nombre = usuario.get('nombre', 'Docente Desconocido')
         rol = usuario.get('rol', 'Docente')
+        
+        # Si el UID existe, limpiamos el último UID no registrado
+        actualizar_monitoreo({"ultimo_uid_no_registrado": None})
         
         if estado_actual["docente_encargado_uid"] == uid:
             # Salida del encargado
@@ -170,7 +175,7 @@ def procesar_rfid(uid):
                 "hora_salida": ahora_str,
                 "tiempo_permanencia_min": minutos,
                 "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
-                "saca_producto": False, # Por defecto
+                "saca_producto": False,
                 "producto_extraido_id": ""
             })
             
@@ -188,11 +193,25 @@ def procesar_rfid(uid):
             
         # Abrir la puerta en ambos casos
         threading.Thread(target=abrir_chapa).start()
+        return {"status": "authorized", "nombre": nombre, "rol": rol}
     else:
         print(f"[ACCESO DENEGADO] UID no registrado: {uid}")
+        # Guardar último UID no registrado en Firebase para que el frontend despliegue el formulario
+        actualizar_monitoreo({"ultimo_uid_no_registrado": uid})
+        return {"status": "unregistered", "uid": uid}
+
+def procesar_rfid(uid):
+    registrar_acceso_docente(uid)
 
 # --- SERVIDOR FLASK (HTTP POST) ---
 app = Flask(__name__)
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
+    return response
 
 @app.route('/api/sensores', methods=['POST'])
 def recibir_sensores():
@@ -207,24 +226,53 @@ def recibir_sensores():
         print(f"[FLUJO] Ingreso. Total: {estado_actual['personas_dentro_actualmente']}")
         actualizar_monitoreo({"personas_dentro_actualmente": estado_actual["personas_dentro_actualmente"]})
         
+        # Registrar en base de datos con marca de tiempo
+        db.reference('historial_flujo').push({
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "evento": "ingreso",
+            "aforo_actual": estado_actual["personas_dentro_actualmente"]
+        })
+        
     elif evento == "salida":
         estado_actual["personas_dentro_actualmente"] = max(0, estado_actual["personas_dentro_actualmente"] - 1)
         print(f"[FLUJO] Salida. Total: {estado_actual['personas_dentro_actualmente']}")
         actualizar_monitoreo({"personas_dentro_actualmente": estado_actual["personas_dentro_actualmente"]})
         
+        # Registrar en base de datos con marca de tiempo
+        db.reference('historial_flujo').push({
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "evento": "salida",
+            "aforo_actual": estado_actual["personas_dentro_actualmente"]
+        })
+        
     elif evento == "movimiento_detectado":
-        if estado_actual["personas_dentro_actualmente"] == 0:
-            print("[ALERTA] ¡Movimiento detectado con aula vacía!")
-            estado_actual["alerta_pir"] = True
-            actualizar_monitoreo({"alerta_pir": True})
-            
-            # Guardar evento de alerta histórico
-            db.reference('alertas_historicas').push({
-                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "mensaje": "Movimiento detectado con aula vacía."
-            })
+        # El sensor PIR solo debe registrar alertas si la puerta está estrictamente CERRADA
+        if estado_actual["estado_chapa"] == "CERRADA":
+            if estado_actual["personas_dentro_actualmente"] == 0:
+                print("[ALERTA] ¡Movimiento detectado con aula vacía y puerta cerrada!")
+                estado_actual["alerta_pir"] = True
+                actualizar_monitoreo({"alerta_pir": True})
+                
+                # Guardar evento de alerta histórico
+                db.reference('alertas_historicas').push({
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mensaje": "Movimiento detectado con aula vacía y puerta cerrada."
+                })
+            else:
+                print("[PIR] Movimiento detectado normal (aula ocupada).")
         else:
-            print("[PIR] Movimiento detectado normal.")
+            print("[PIR] Alerta ignorada porque la puerta está ABIERTA.")
+            
+    elif evento == "estado_puerta":
+        estado = data.get("estado", "CERRADA")  # "ABIERTA" o "CERRADA"
+        estado_actual["estado_chapa"] = estado
+        actualizar_monitoreo({"estado_chapa": estado})
+        print(f"[PUERTA] Estado del sensor magnético: {estado}")
+        
+    elif evento == "rfid_leido":
+        uid = data.get("uid")
+        result = registrar_acceso_docente(uid)
+        return jsonify(result), 200
     
     elif evento == "nivel_luz":
         valor_ldr = data.get("valor_ldr", 0)
@@ -236,6 +284,191 @@ def recibir_sensores():
         })
             
     return jsonify({"status": "ok"}), 200
+
+
+# ────────────────────────────────────────────────────────────────────────────────────────
+# ENDPOINTS DE INVENTARIO Y QR MÓVIL
+# ────────────────────────────────────────────────────────────────────────────────────────
+
+@app.route('/api/inventario', methods=['POST'])
+def registrar_equipo():
+    """Registra un equipo en inventario de forma segura y devuelve la URL del QR."""
+    data = request.json
+    if not data or 'id' not in data or 'nombre' not in data or 'stock' not in data:
+        return jsonify({"error": "Faltan campos requeridos (id, nombre, stock)"}), 400
+        
+    id_prod = data.get("id").strip()
+    nombre = data.get("nombre").strip()
+    stock = int(data.get("stock", 0))
+    categoria = data.get("categoria", "Laboratorio").strip()
+    
+    try:
+        # Transacción segura: Inserción en Firebase
+        ref = db.reference('inventario').child(id_prod)
+        ref.set({
+            "nombre_producto": nombre,
+            "stock": stock,
+            "categoria": categoria
+        })
+        
+        # Devolver URL dinámica para el código QR
+        server_ip = request.host  # Obtiene IP:Puerto actual
+        qr_url = f"http://{server_ip}/dashboard/equipo/{id_prod}"
+        
+        return jsonify({
+            "status": "success",
+            "qr_url": qr_url,
+            "message": "Equipo guardado en la base de datos."
+        }), 200
+        
+    except Exception as e:
+        print(f"[ERROR INVENTARIO] Falla en base de datos: {e}")
+        return jsonify({"status": "error", "message": f"Error de inserción: {str(e)}"}), 500
+
+
+@app.route('/dashboard/equipo/<id_equipo>', methods=['GET'])
+def ver_equipo(id_equipo):
+    """Muestra una interfaz móvil responsiva y elegante del equipo escaneado."""
+    try:
+        equipo = db.reference('inventario').child(id_equipo).get()
+        if not equipo:
+            return f"<h1>Equipo {id_equipo} no encontrado</h1>", 404
+            
+        nombre = equipo.get("nombre_producto", "Material Desconocido")
+        stock = equipo.get("stock", 0)
+        categoria = equipo.get("categoria", "Equipos")
+        
+        html_responsivo = f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Inventario - {nombre}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+            <style>
+                :root {{
+                    --bg: #070a13;
+                    --card-bg: rgba(13, 20, 38, 0.65);
+                    --border: rgba(255, 255, 255, 0.08);
+                    --primary: #3b82f6;
+                    --accent: #8b5cf6;
+                    --text: #f8fafc;
+                    --text-muted: #94a3b8;
+                    --success: #10b981;
+                    --danger: #ef4444;
+                }}
+                body {{
+                    background: radial-gradient(circle at 50% 50%, #1e1b4b 0%, #070a13 100%);
+                    color: var(--text);
+                    font-family: 'Outfit', sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    box-sizing: border-box;
+                }}
+                .mobile-card {{
+                    background: var(--card-bg);
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
+                    border: 1px solid var(--border);
+                    border-radius: 24px;
+                    padding: 30px;
+                    width: 100%;
+                    max-width: 380px;
+                    box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+                    text-align: center;
+                }}
+                .header-logo {{
+                    font-size: 0.85rem;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    color: var(--primary);
+                    margin-bottom: 25px;
+                    font-weight: 800;
+                }}
+                h1 {{
+                    font-size: 1.6rem;
+                    font-weight: 800;
+                    margin: 10px 0;
+                    line-height: 1.2;
+                }}
+                .uid {{
+                    font-family: monospace;
+                    font-size: 0.85rem;
+                    color: var(--accent);
+                    background: rgba(139, 92, 246, 0.12);
+                    border: 1px dashed rgba(139, 92, 246, 0.3);
+                    padding: 4px 12px;
+                    border-radius: 8px;
+                    display: inline-block;
+                    margin-bottom: 30px;
+                }}
+                .info-item {{
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 14px 0;
+                    border-bottom: 1px solid var(--border);
+                }}
+                .info-item:last-child {{
+                    border-bottom: none;
+                }}
+                .label {{
+                    color: var(--text-muted);
+                    font-size: 0.9rem;
+                    font-weight: 500;
+                }}
+                .value {{
+                    font-weight: 600;
+                    font-size: 1rem;
+                }}
+                .badge {{
+                    padding: 6px 14px;
+                    border-radius: 20px;
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                }}
+                .badge-green {{
+                    background: rgba(16, 185, 129, 0.15);
+                    color: var(--success);
+                    border: 1px solid rgba(16, 185, 129, 0.3);
+                }}
+                .badge-red {{
+                    background: rgba(239, 68, 68, 0.15);
+                    color: var(--danger);
+                    border: 1px solid rgba(239, 68, 68, 0.3);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="mobile-card">
+                <div class="header-logo">UCUENCA — MATERIAL IOT</div>
+                <h1>{nombre}</h1>
+                <div class="uid">{id_equipo}</div>
+                
+                <div class="info-item">
+                    <span class="label">Categoría</span>
+                    <span class="value" style="color:var(--primary);">{categoria}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Disponibilidad</span>
+                    <span class="value">
+                        <span class="badge { 'badge-green' if stock > 0 else 'badge-red' }">
+                            {stock} unidades
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html_responsivo, 200
+    except Exception as e:
+        return f"<h1>Error al cargar equipo: {str(e)}</h1>", 500
 
 
 # ────────────────────────────────────────────────────────────────────────────────────────

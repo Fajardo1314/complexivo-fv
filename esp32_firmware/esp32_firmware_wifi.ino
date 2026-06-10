@@ -2,19 +2,19 @@
 #include <MFRC522.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
 // ═══════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN WIFI & BACKEND
+//  CONFIGURACIÓN WIFI & FIREBASE (Ajustar a tu entorno)
 // ═══════════════════════════════════════════════════════════════
-const char* WIFI_SSID     = "Mundo_Feliz";       // Ajustar a tu red local
-const char* WIFI_PASSWORD = "Tu_Password_WiFi";   // Ajustar a tu password
+const char* WIFI_SSID     = "Tu_Nombre_de_WiFi";
+const char* WIFI_PASSWORD = "Tu_Contrasena_de_WiFi";
 
-// Endpoint del backend (Flask en la Raspberry o laptop)
-const char* BACKEND_URL = "http://192.168.18.246:5000/api/sensores"; 
+// URL base de tu Realtime Database en Firebase
+const char* FIREBASE_HOST = "https://complexivo-fv-default-rtdb.firebaseio.com/monitoreo_tiempo_real.json";
 
 // ═══════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN DE PINES (Mapeados a tu ESP32 de 30 Pines)
+//  CONFIGURACIÓN DE PINES (Mapeados a tu ESP32)
 // ═══════════════════════════════════════════════════════════════
 const int PIN_IR1 = 34;       // Sensor IR ENTRADA
 const int PIN_IR2 = 35;       // Sensor IR SALIDA
@@ -43,9 +43,12 @@ int last_IR2 = HIGH;
 unsigned long time_IR1_triggered = 0;
 unsigned long time_IR2_triggered = 0;
 unsigned long last_cruce_time = 0;
+int personas_dentro = 0; 
 
 bool last_pir_state = LOW;
 unsigned long last_pir_post = 0;
+unsigned long pir_trigger_time = 0;
+bool pir_alert_active = false;
 
 int ultimo_estado_puerta = -1; 
 unsigned long ultimo_tiempo_puerta = 0;
@@ -55,7 +58,7 @@ void setup() {
   delay(1000);
   
   Serial.println("\n═══════════════════════════════════════");
-  Serial.println("  ESP32 — FIRMWARE CLIENTE HTTP");
+  Serial.println("  ESP32 — WIFI & FIREBASE (Monitoreo)");
   Serial.println("═══════════════════════════════════════\n");
 
   // Configurar pines
@@ -69,12 +72,12 @@ void setup() {
   rfid.PCD_Init();
   Serial.println("[SISTEMA] RFID Inicializado.");
 
-  // Conectar WiFi
+  // Conectar a Wi-Fi
   conectarWiFi();
 }
 
 void loop() {
-  // Asegurar reconexión WiFi
+  // Mantener la conexión WiFi activa
   if (WiFi.status() != WL_CONNECTED) {
     conectarWiFi();
   }
@@ -84,60 +87,76 @@ void loop() {
   procesarRFID();
   procesarPuerta();
 
+  // Limpiar alerta PIR después de 6 segundos de inactividad
+  if (pir_alert_active && (millis() - pir_trigger_time > 6000)) {
+    Serial.println("[PIR] Limpiando alerta por inactividad...");
+    if (patchFirebase("{\"alerta_pir\": false}")) {
+      pir_alert_active = false;
+    }
+  }
+
   delay(50);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  CONEXIÓN WIFI
+// ═══════════════════════════════════════════════════════════════
 void conectarWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
-  
   Serial.print("[WIFI] Conectando a ");
   Serial.println(WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  int retries = 0;
-  while (WiFi.status() != WL_CONNECTED && retries < 20) {
+  int reintentos = 0;
+  while (WiFi.status() != WL_CONNECTED && reintentos < 20) {
     delay(500);
     Serial.print(".");
-    retries++;
+    reintentos++;
   }
-  
+
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WIFI] [OK] Conectado. IP: ");
+    Serial.println("\n[WIFI] [OK] Conectado exitosamente.");
+    Serial.print("[WIFI] Dirección IP: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WIFI] [ERROR] Falló conexión.");
+    Serial.println("\n[WIFI] [ERROR] No se pudo conectar a la red WiFi.");
   }
 }
 
-// Función auxiliar para enviar eventos HTTP POST al backend
-void enviarEvento(String evento, String extras = "") {
+// ═══════════════════════════════════════════════════════════════
+//  ENVÍO DE DATOS A FIREBASE (PATCH REST API)
+// ═══════════════════════════════════════════════════════════════
+bool patchFirebase(String jsonPayload) {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[HTTP] [ERROR] WiFi desconectado. No se puede enviar evento.");
-    return;
+    Serial.println("[FIREBASE] [ERROR] Sin conexión WiFi.");
+    return false;
   }
 
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure(); // Omitir validación de certificado SSL para simplicidad
+  
   HTTPClient http;
-  http.begin(client, BACKEND_URL);
+  http.begin(client, FIREBASE_HOST);
   http.addHeader("Content-Type", "application/json");
 
-  String payload = "{\"evento\":\"" + evento + "\"";
-  if (extras.length() > 0) {
-    payload += "," + extras;
-  }
-  payload += "}";
+  Serial.print("[FIREBASE] Enviando PATCH: ");
+  Serial.println(jsonPayload);
 
-  Serial.println("[HTTP] Enviando POST a backend: " + payload);
-  int httpResponseCode = http.POST(payload);
+  int httpCode = http.PATCH(jsonPayload);
 
-  if (httpResponseCode > 0) {
-    Serial.print("[HTTP] Código respuesta: ");
-    Serial.println(httpResponseCode);
+  if (httpCode > 0) {
+    Serial.print("[FIREBASE] Respuesta HTTP: ");
+    Serial.println(httpCode);
+    if (httpCode == HTTP_CODE_OK) {
+      http.end();
+      return true;
+    }
   } else {
-    Serial.print("[HTTP] Error enviando POST: ");
-    Serial.println(httpResponseCode);
+    Serial.print("[FIREBASE] Fallo en la solicitud. Error: ");
+    Serial.println(http.errorToString(httpCode).c_str());
   }
+  
   http.end();
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -150,19 +169,23 @@ void procesarPuerta() {
   int estadoActualPuerta = digitalRead(PIN_MAGNETICO);
 
   if (estadoActualPuerta != ultimo_estado_puerta) {
-    String estadoStr = (estadoActualPuerta == LOW) ? "CERRADA" : "ABIERTA";
-    Serial.println("[PUERTA] Estado: " + estadoStr);
+    String payload = "";
+    if (estadoActualPuerta == LOW) {
+      Serial.println("[PUERTA] Estado: CERRADA");
+      payload = "{\"estado_chapa\": \"CERRADA\"}";
+    } else {
+      Serial.println("[PUERTA] Estado: ABIERTA");
+      payload = "{\"estado_chapa\": \"ABIERTA\"}";
+    }
     
-    // Enviar evento de cambio de estado de puerta al backend
-    enviarEvento("estado_puerta", "\"estado\":\"" + estadoStr + "\"");
-    
+    patchFirebase(payload);
     ultimo_estado_puerta = estadoActualPuerta;
   }
   ultimo_tiempo_puerta = tiempoActual;
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  LÓGICA SENSOR RFID — Lectura de tarjetas/llaveros
+//  LÓGICA SENSOR RFID
 // ═══════════════════════════════════════════════════════════════
 void procesarRFID() {
   if (!rfid.PICC_IsNewCardPresent()) return;
@@ -177,8 +200,8 @@ void procesarRFID() {
   
   Serial.println("[RFID] Tarjeta Detectada -> UID: " + uidStr);
   
-  // Enviar el UID leido al backend
-  enviarEvento("rfid_leido", "\"uid\":\"" + uidStr + "\"");
+  // Registrar el UID de la tarjeta en Firebase
+  patchFirebase("{\"ultimo_uid_rfid\": \"" + uidStr + "\"}");
 
   rfid.PICC_HaltA();
 }
@@ -203,16 +226,17 @@ void procesarFlujo() {
   }
   if (current_IR2 == LOW && last_IR2 == HIGH) {
     time_IR2_triggered = currentTime;
-    Serial.println("[IR] Sensor 2 (OUT) interrumpido");
+    Serial.println("[IR] Sensor 2 (OUT) interrupted");
   }
 
   if (time_IR1_triggered > 0 && time_IR2_triggered > time_IR1_triggered) {
     if (time_IR2_triggered - time_IR1_triggered < TIMEOUT_FLUJO) {
+      personas_dentro++;
       Serial.println("\n--> [INGRESO DETECTADO] -->");
+      Serial.print("[CONTEO] Personas: ");
+      Serial.println(personas_dentro);
       
-      // Enviar evento de ingreso al backend
-      enviarEvento("ingreso");
-      
+      patchFirebase("{\"personas_dentro_actualmente\": " + String(personas_dentro) + "}");
       last_cruce_time = currentTime;
     }
     time_IR1_triggered = 0;
@@ -220,11 +244,12 @@ void procesarFlujo() {
   }
   else if (time_IR2_triggered > 0 && time_IR1_triggered > time_IR2_triggered) {
     if (time_IR1_triggered - time_IR2_triggered < TIMEOUT_FLUJO) {
+      personas_dentro = max(0, personas_dentro - 1);
       Serial.println("\n<-- [SALIDA DETECTADA] <--");
+      Serial.print("[CONTEO] Personas: ");
+      Serial.println(personas_dentro);
       
-      // Enviar evento de salida al backend
-      enviarEvento("salida");
-      
+      patchFirebase("{\"personas_dentro_actualmente\": " + String(personas_dentro) + "}");
       last_cruce_time = currentTime;
     }
     time_IR1_triggered = 0;
@@ -244,21 +269,16 @@ void procesarFlujo() {
 void procesarPIR() {
   bool pir_state = digitalRead(PIN_PIR) == HIGH;
   unsigned long currentTime = millis();
-  int estadoPuerta = digitalRead(PIN_MAGNETICO);
 
   if (pir_state && !last_pir_state) {
-    // El sensor PIR solo debe registrar alertas si la puerta está estrictamente CERRADA (LOW)
-    if (estadoPuerta == LOW) {
-      if (currentTime - last_pir_post > INTERVALO_PIR) {
-        Serial.println("[PIR] Alerta: Movimiento detectado en el aula.");
-        
-        // Enviar evento al backend
-        enviarEvento("movimiento_detectado");
-        
-        last_pir_post = currentTime;
+    if (currentTime - last_pir_post > INTERVALO_PIR) {
+      Serial.println("[PIR] Alerta: Movimiento detectado en el aula.");
+      
+      if (patchFirebase("{\"alerta_pir\": true}")) {
+        pir_alert_active = true;
+        pir_trigger_time = currentTime;
       }
-    } else {
-      Serial.println("[PIR] Movimiento detectado pero ignorado (puerta ABIERTA).");
+      last_pir_post = currentTime;
     }
   }
   last_pir_state = pir_state;

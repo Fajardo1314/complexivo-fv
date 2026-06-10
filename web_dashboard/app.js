@@ -65,47 +65,57 @@ setInterval(() => {
 }, 1000);
 
 // --- CHART.JS CONFIG ---
-const ctx = document.getElementById('traficoChart').getContext('2d');
-const traficoChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [{
-            label: 'Personas en el Aula (Historial)',
-            data: [],
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
-            borderWidth: 3,
-            fill: true,
-            tension: 0.4,
-            pointBackgroundColor: '#8b5cf6',
-            pointBorderColor: '#fff',
-            pointRadius: 4,
-            pointHoverRadius: 6
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                grid: { color: 'rgba(255,255,255,0.03)' },
-                ticks: { color: '#94a3b8', stepSize: 1 }
+let traficoChart = null;
+try {
+    if (typeof Chart !== 'undefined') {
+        const ctx = document.getElementById('traficoChart').getContext('2d');
+        traficoChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Personas en el Aula (Historial)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#8b5cf6',
+                    pointBorderColor: '#fff',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
             },
-            x: {
-                grid: { display: false },
-                ticks: { color: '#94a3b8' }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.03)' },
+                        ticks: { color: '#94a3b8', stepSize: 1 }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
             }
-        },
-        plugins: {
-            legend: { display: false }
-        }
+        });
+    } else {
+        console.warn("Chart.js no está cargado. Se omitirá el gráfico de afluencia.");
     }
-});
+} catch (e) {
+    console.error("Error al inicializar Chart.js: ", e);
+}
 
 // Función para actualizar gráfico limitando a 12 puntos
 function updateChart(timeLabel, personas) {
+    if (!traficoChart) return;
     if (traficoChart.data.labels.length > 12) {
         traficoChart.data.labels.shift();
         traficoChart.data.datasets[0].data.shift();
@@ -160,19 +170,31 @@ onValue(ref(db, 'monitoreo_tiempo_real'), (snapshot) => {
             subFoco.innerText = "Luz artificial desactivada";
         }
 
-        // PIR y Alerta
-        if (data.alerta_pir) {
-            estadoPir.innerText = "🚨 ALERTA";
-            subAlerta.innerText = "¡Movimiento con aula vacía!";
+        // PIR y Alerta Combinada
+        if (chapaState === "CERRADA" && data.alerta_pir) {
+            estadoPir.innerText = "🚨 INTRUSIÓN";
+            subAlerta.innerText = "¡Movimiento con puerta cerrada!";
             cardAlerta.classList.add('alert-danger');
             cardAlerta.classList.remove('card-secure');
             iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
+            
+            mostrarAlertaCritica("¡Movimiento detectado con el cerrojo de la puerta CERRADO!");
+        } else if (data.alerta_pir) {
+            estadoPir.innerText = "🚨 ALERTA";
+            subAlerta.innerText = "¡Movimiento detectado!";
+            cardAlerta.classList.add('alert-danger');
+            cardAlerta.classList.remove('card-secure');
+            iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
+            
+            detenerAlertaCritica(); // Limpiar intrusión si no aplica la combinación
         } else {
             estadoPir.innerText = "Seguro";
             subAlerta.innerText = "No se detecta movimiento";
             cardAlerta.classList.remove('alert-danger');
             cardAlerta.classList.add('card-secure');
             iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z"/></svg>`;
+            
+            detenerAlertaCritica();
         }
     }
 });
@@ -189,11 +211,19 @@ onValue(ref(db, 'inventario'), (snapshot) => {
                 <td><span style="font-family:monospace; color:var(--primary); font-weight:700;">${key}</span></td>
                 <td>${prod.nombre_producto}</td>
                 <td><span class="badge ${prod.stock > 0 ? 'badge-green' : 'badge-red'}">${prod.stock} unidades</span></td>
+                <td>
+                    <button class="qr-btn" data-id="${key}" data-nombre="${prod.nombre_producto}" style="padding:6px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4); color:var(--primary); border-radius:8px; font-weight:600; cursor:pointer; transition:all 0.2s;">👁️ Ver QR</button>
+                </td>
             `;
+            tr.querySelector('.qr-btn').addEventListener('click', (e) => {
+                const id = e.target.dataset.id;
+                const nombre = e.target.dataset.nombre;
+                mostrarModalQR(id, nombre);
+            });
             listaInventario.appendChild(tr);
         });
     } else {
-        listaInventario.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
+        listaInventario.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
     }
 });
 
@@ -286,9 +316,13 @@ btnGuardarUsuario.addEventListener('click', async () => {
             rol: rol
         });
 
+        // Limpiar en Firebase el último UID no registrado
+        await set(ref(db, 'monitoreo_tiempo_real/ultimo_uid_no_registrado'), null);
+
         userUid.value = '';
         userNombre.value = '';
         userRol.value = '';
+        userUid.disabled = false;
         alert('Docente autorizado y guardado en Firebase.');
     } catch (e) {
         console.error(e);
@@ -301,6 +335,7 @@ btnGuardarProd.addEventListener('click', async () => {
     const idProd = document.getElementById('prodId').value.trim();
     const nombre = document.getElementById('prodNombre').value.trim();
     const stock = parseInt(document.getElementById('prodStock').value);
+    const categoria = "Laboratorio"; // Categoría por defecto para transacciones
 
     if (!idProd || !nombre || isNaN(stock)) {
         alert('Por favor, completa todos los campos del material.');
@@ -308,37 +343,48 @@ btnGuardarProd.addEventListener('click', async () => {
     }
 
     try {
-        const updates = {};
-        updates['inventario/' + idProd] = {
-            nombre_producto: nombre,
-            stock: stock
-        };
-
-        await update(ref(db), updates);
-
-        // Generar QR visual
-        qrPreview.innerHTML = '';
-        new QRCode(qrPreview, {
-            text: idProd,
-            width: 130,
-            height: 130,
-            colorDark: "#0f172a",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
+        // Enviar al backend vía HTTP POST en puerto 5000 para asegurar transacción exitosa antes de generar QR
+        const response = await fetch(`http://${window.location.hostname}:5000/api/inventario`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: idProd, nombre: nombre, stock: stock, categoria: categoria })
         });
 
-        qrLabel.innerText = idProd;
-        qrResultArea.style.display = 'flex';
+        const result = await response.json();
 
-        // Limpiar inputs
-        document.getElementById('prodId').value = '';
-        document.getElementById('prodNombre').value = '';
-        document.getElementById('prodStock').value = '';
+        if (response.ok && result.status === "success") {
+            const qrUrl = result.qr_url;
 
-        alert('Material registrado exitosamente.');
+            // Generar QR visual apuntando al perfil del equipo
+            qrPreview.innerHTML = '';
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrPreview, {
+                    text: qrUrl,
+                    width: 130,
+                    height: 130,
+                    colorDark: "#0f172a",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else {
+                qrPreview.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;padding:20px;">Librería QR no disponible offline. Enlace del equipo: <br><a href="${qrUrl}" target="_blank" style="color:var(--primary);">${qrUrl}</a></p>`;
+            }
+
+            qrLabel.innerText = idProd;
+            qrResultArea.style.display = 'flex';
+
+            // Limpiar inputs
+            document.getElementById('prodId').value = '';
+            document.getElementById('prodNombre').value = '';
+            document.getElementById('prodStock').value = '';
+
+            alert('Material registrado exitosamente y QR de perfil generado.');
+        } else {
+            alert('Error al guardar en base de datos: ' + result.message);
+        }
     } catch (e) {
         console.error(e);
-        alert('Error al guardar en Firebase.');
+        alert('Error de red al conectar con el servidor.');
     }
 });
 
@@ -445,3 +491,236 @@ btnSeedData.addEventListener('click', async () => {
         alert('Error al inyectar datos semilla: ' + e.message);
     }
 });
+
+// --- SISTEMA DE ALERTA DE SEGURIDAD CRÍTICA Y AUDIO ---
+let audioCtx = null;
+let beepInterval = null;
+
+function playAlarmSound() {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        osc.type = 'sawtooth';
+        // Frecuencia alternante para efecto sirena
+        const freq = (new Date().getSeconds() % 2 === 0) ? 988 : 659; // B5 o E5
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        
+        gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+        console.warn("No se pudo reproducir el sonido de la alarma: ", e);
+    }
+}
+
+function iniciarAlarmaSonora() {
+    if (!beepInterval) {
+        playAlarmSound();
+        beepInterval = setInterval(playAlarmSound, 600);
+    }
+}
+
+function detenerAlarmaSonora() {
+    if (beepInterval) {
+        clearInterval(beepInterval);
+        beepInterval = null;
+    }
+}
+
+function mostrarAlertaCritica(mensaje) {
+    let alertBanner = document.getElementById('critical-alert-banner');
+    if (!alertBanner) {
+        alertBanner = document.createElement('div');
+        alertBanner.id = 'critical-alert-banner';
+        alertBanner.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 7, 23, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid var(--danger);
+            color: var(--text-main);
+            padding: 18px 32px;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.2);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-weight: 700;
+            font-size: 1.05rem;
+            animation: alertBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, alertFlash 1s infinite alternate;
+        `;
+        
+        if (!document.getElementById('critical-alert-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'critical-alert-styles';
+            styles.innerHTML = `
+                @keyframes alertBounce {
+                    from { transform: translate(-50%, -100px); opacity: 0; }
+                    to { transform: translate(-50%, 0); opacity: 1; }
+                }
+                @keyframes alertFlash {
+                    0% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
+                    100% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 10px 50px rgba(239, 68, 68, 0.6), 0 0 20px rgba(239, 68, 68, 0.4); }
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+        
+        alertBanner.innerHTML = `
+            <span style="font-size: 1.6rem; animation: iconShake 0.5s infinite;">🚨</span>
+            <div style="display: flex; flex-direction: column;">
+                <span style="letter-spacing: 1px; text-transform: uppercase; font-size: 0.75rem; color: var(--danger); font-weight: 800;">ALERTA DE SEGURIDAD CRÍTICA</span>
+                <span id="critical-alert-text">${mensaje}</span>
+            </div>
+        `;
+        document.body.appendChild(alertBanner);
+    } else {
+        document.getElementById('critical-alert-text').innerText = mensaje;
+    }
+    
+    iniciarAlarmaSonora();
+}
+
+function detenerAlertaCritica() {
+    const alertBanner = document.getElementById('critical-alert-banner');
+    if (alertBanner) {
+        alertBanner.remove();
+    }
+    detenerAlarmaSonora();
+}
+
+// --- ESCUCHAR ULTIMO UID NO REGISTRADO (REGISTRO RÁPIDO RFID) ---
+onValue(ref(db, 'monitoreo_tiempo_real/ultimo_uid_no_registrado'), (snapshot) => {
+    const uidNoReg = snapshot.val();
+    const userUidInput = document.getElementById('userUid');
+    if (!userUidInput) return;
+    
+    const formContainer = userUidInput.closest('.form-container');
+    if (!formContainer) return;
+    
+    if (uidNoReg) {
+        // Pre-rellenar UID no registrado y bloquear campo
+        userUidInput.value = uidNoReg;
+        userUidInput.disabled = true;
+        
+        // Destacar visualmente el formulario en el panel de Gestión de Docentes
+        formContainer.style.border = '2px solid var(--accent)';
+        formContainer.style.boxShadow = '0 0 35px var(--accent-glow)';
+        
+        // Mostrar alerta/indicador superior
+        mostrarAlertaCritica(`Tarjeta RFID no registrada detectada: ${uidNoReg}. Proceda a registrar el docente.`);
+    } else {
+        // Desbloquear y restaurar
+        userUidInput.value = '';
+        userUidInput.disabled = false;
+        formContainer.style.border = '';
+        formContainer.style.boxShadow = '';
+    }
+});
+
+// --- FUNCIÓN: GENERAR Y MOSTRAR MODAL QR ---
+function mostrarModalQR(idProd, nombreProd) {
+    let modal = document.getElementById('qr-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'qr-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(7, 10, 19, 0.85);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            z-index: 11000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        modal.innerHTML = `
+            <div class="glass-panel" style="background:var(--glass-bg); padding:30px; border-radius:24px; text-align:center; max-width:320px; border:1px solid var(--glass-border); box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
+                <h3 style="margin-bottom:10px; font-size:1.2rem; color:var(--text-main); font-weight:700;">Etiqueta QR</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:20px;" id="modal-product-name"></p>
+                <div class="printable-badge" style="background:white; color:#0f172a; padding:20px; border-radius:12px; border:3px solid #0f172a; display:inline-block; margin-bottom:20px;">
+                    <div class="badge-header" style="font-size:0.65rem; font-weight:900; letter-spacing:0.5px; margin-bottom:12px; text-transform:uppercase; border-bottom:1.5px solid #0f172a; padding-bottom:4px; width:100%; color:#0f172a;">UCUENCA - INVENTARIO IOT</div>
+                    <div id="modal-qr-preview" style="background:white; padding:5px; display:flex; align-items:center; justify-content:center;"></div>
+                    <div class="badge-footer" style="margin-top:10px; width:100%;">
+                        <span id="modal-qr-label" style="font-family:monospace; font-size:0.85rem; font-weight:800; background:#f1f5f9; padding:4px 8px; border-radius:4px; display:block; word-break:break-all; border:1px dashed #64748b; color:#0f172a;"></span>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="primary-btn" id="modal-btn-print" style="padding:10px 20px; flex:1;">🖨️ Imprimir</button>
+                    <button class="secondary-btn" id="modal-btn-close" style="margin-top:0; padding:10px 20px; flex:1;">Cerrar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    document.getElementById('modal-product-name').innerText = nombreProd;
+    document.getElementById('modal-qr-label').innerText = idProd;
+    
+    // Generar URL del servidor dinámica apuntando al backend en el puerto 5000
+    const qrUrl = `http://${window.location.hostname}:5000/dashboard/equipo/${idProd}`;
+    
+    const qrContainer = document.getElementById('modal-qr-preview');
+    qrContainer.innerHTML = '';
+    
+    if (typeof QRCode !== 'undefined') {
+        new QRCode(qrContainer, {
+            text: qrUrl,
+            width: 140,
+            height: 140,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    } else {
+        qrContainer.innerHTML = `<p style="color:#0f172a;font-size:0.75rem;padding:10px;font-weight:600;">Librería QR no cargada.<br><a href="${qrUrl}" target="_blank" style="color:var(--primary);">${qrUrl}</a></p>`;
+    }
+    
+    modal.style.display = 'flex';
+    
+    document.getElementById('modal-btn-close').onclick = () => {
+        modal.style.display = 'none';
+    };
+    
+    document.getElementById('modal-btn-print').onclick = () => {
+        const printContent = modal.querySelector('.printable-badge').outerHTML;
+        const printWindow = window.open('', '', 'height=500,width=500');
+        printWindow.document.write('<html><head><title>Imprimir QR</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write('body { display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: monospace; }');
+        printWindow.document.write('.printable-badge { background: white; color: #000; padding: 20px; border: 3px solid #000; border-radius: 12px; width: 220px; text-align: center; }');
+        printWindow.document.write('.badge-header { font-size: 10px; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px; }');
+        printWindow.document.write('#modal-qr-preview { padding: 5px; background: white; display: inline-block; margin-bottom: 10px; }');
+        printWindow.document.write('#modal-qr-label { font-family: monospace; font-size: 12px; font-weight: bold; background: #eee; padding: 4px; border: 1px dashed #000; display: block; word-break: break-all; }');
+        printWindow.document.write('</style></head><body>');
+        printWindow.document.write(printContent);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+        }, 500);
+    };
+}
