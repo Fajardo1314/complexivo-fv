@@ -12,6 +12,10 @@ const db = getDatabase(app);
 // --- GLOBAL STATE ---
 let usuarioActivo = null;
 
+// Audio alarm state (declared globally to avoid TDZ with Firebase listeners)
+let audioCtx = null;
+let beepInterval = null;
+
 // Inicializar el admin en Firebase si no existe
 async function inicializarAdmin() {
     try {
@@ -90,6 +94,11 @@ const webUserFormTitle = document.getElementById('webUserFormTitle');
 
 // Botón Datos Semilla
 const btnSeedData = document.getElementById('btnSeedData');
+
+// QR Labels panel
+const qrSearchInput = document.getElementById('qrSearchInput');
+const labelsPrintGrid = document.getElementById('labelsPrintGrid');
+const btnExportarPdfLabels = document.getElementById('btnExportarPdfLabels');
 
 // --- NAVEGACIÓN ---
 navBtns.forEach(btn => {
@@ -648,88 +657,8 @@ btnGuardarUsuario.addEventListener('click', async () => {
 });
 
 // --- LÓGICA: GENERAR QR E INVENTARIO ---
-btnGuardarProd.addEventListener('click', async () => {
-    const idProd = document.getElementById('prodId').value.trim();
-    const nombre = document.getElementById('prodNombre').value.trim();
-    const stock = parseInt(document.getElementById('prodStock').value);
-    const categoria = "Laboratorio"; // Categoría por defecto para transacciones
+// [QR legacy form removed — now handled by btnAgregarInventario in the inventory panel]
 
-    if (!idProd || !nombre || isNaN(stock)) {
-        alert('Por favor, completa todos los campos del material.');
-        return;
-    }
-
-    try {
-        // Enviar al backend vía HTTP POST en puerto 5000 para asegurar transacción exitosa antes de generar QR
-        const response = await fetch(`http://${window.location.hostname}:5000/api/inventario`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: idProd, nombre: nombre, stock: stock, categoria: categoria })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.status === "success") {
-            const qrUrl = `https://smartstock.eu1.netbird.services/nodered/form-retiro?id_producto=${idProd}`;
-
-            // Generar QR visual apuntando al perfil del equipo
-            qrPreview.innerHTML = '';
-            if (typeof QRCode !== 'undefined') {
-                new QRCode(qrPreview, {
-                    text: qrUrl,
-                    width: 130,
-                    height: 130,
-                    colorDark: "#0f172a",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            } else {
-                qrPreview.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;padding:20px;">Librería QR no disponible offline. Enlace del equipo: <br><a href="${qrUrl}" target="_blank" style="color:var(--primary);">${qrUrl}</a></p>`;
-            }
-
-            qrLabel.innerText = idProd;
-            qrResultArea.style.display = 'flex';
-
-            // Limpiar inputs
-            document.getElementById('prodId').value = '';
-            document.getElementById('prodNombre').value = '';
-            document.getElementById('prodStock').value = '';
-
-            alert('Material registrado exitosamente y QR de perfil generado.');
-        } else {
-            alert('Error al guardar en base de datos: ' + result.message);
-        }
-    } catch (e) {
-        console.error(e);
-        alert('Error de red al conectar con el servidor.');
-    }
-});
-
-// Imprimir QR
-btnPrintQR.addEventListener('click', () => {
-    const printContent = document.querySelector('.printable-badge').outerHTML;
-
-    // Crear una ventana de impresión limpia
-    const printWindow = window.open('', '', 'height=500,width=500');
-    printWindow.document.write('<html><head><title>Imprimir Etiqueta</title>');
-    printWindow.document.write('<style>');
-    printWindow.document.write('body { display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: monospace; }');
-    printWindow.document.write('.printable-badge { background: white; color: #000; padding: 20px; border: 3px solid #000; border-radius: 12px; width: 220px; text-align: center; }');
-    printWindow.document.write('.badge-header { font-size: 10px; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px; }');
-    printWindow.document.write('#qrPreview { padding: 5px; background: white; display: inline-block; margin-bottom: 10px; }');
-    printWindow.document.write('#qrLabel { font-family: monospace; font-size: 12px; font-weight: bold; background: #eee; padding: 4px; border: 1px dashed #000; display: block; word-break: break-all; }');
-    printWindow.document.write('</style></head><body>');
-    printWindow.document.write(printContent);
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-    printWindow.focus();
-
-    // Ejecutar retraso para cargar el DOM y luego imprimir
-    setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-    }, 500);
-});
 
 // --- ACCIÓN: SEED DATA (INYECTAR DATOS SEMILLA) ---
 btnSeedData.addEventListener('click', async () => {
@@ -810,8 +739,7 @@ btnSeedData.addEventListener('click', async () => {
 });
 
 // --- SISTEMA DE ALERTA DE SEGURIDAD CRÍTICA Y AUDIO ---
-let audioCtx = null;
-let beepInterval = null;
+
 
 function playAlarmSound() {
     try {
@@ -1440,9 +1368,7 @@ btnCancelarModal.addEventListener('click', async () => {
 });
 
 // --- LÓGICA DE BÚSQUEDA AVANZADA Y EXPORTACIÓN DE ETIQUETAS QR ---
-const qrSearchInput = document.getElementById('qrSearchInput');
-const labelsPrintGrid = document.getElementById('labelsPrintGrid');
-const btnExportarPdfLabels = document.getElementById('btnExportarPdfLabels');
+
 
 function actualizarEtiquetasQR() {
     if (!labelsPrintGrid) return;
