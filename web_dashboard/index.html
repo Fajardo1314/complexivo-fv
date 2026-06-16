@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UCuenca TEC - Dashboard IoT</title>
+    <title>Smart Stock</title>
     <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,10 +15,47 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- SMTP.js -->
+    <script src="https://smtpjs.com/v3/smtp.js"></script>
 </head>
 
 <body>
-    <div class="dashboard-container">
+    <!-- Overlay de Login y MFA -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box glass-panel">
+            <!-- Formulario de Login -->
+            <div id="formLogin" class="auth-step">
+                <h2>🔐 Iniciar Sesión</h2>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Acceso restringido para personal autorizado
+                </p>
+                <div class="input-group">
+                    <label for="loginUser">Usuario</label>
+                    <input type="text" id="loginUser" placeholder="usuario">
+                </div>
+                <div class="input-group">
+                    <label for="loginPass">Contraseña</label>
+                    <input type="password" id="loginPass" placeholder="••••••••">
+                </div>
+                <button class="primary-btn" id="btnIngresar">Verificar Credenciales</button>
+            </div>
+
+            <!-- Formulario de OTP (MFA) -->
+            <div id="formOtp" class="auth-step" style="display: none;">
+                <h2>Segundo Factor (MFA)</h2>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Hemos enviado un código OTP de 6 dígitos a su
+                    correo electrónico.</p>
+                <div class="input-group">
+                    <label for="loginOtp">Código PIN</label>
+                    <input type="text" id="loginOtp" placeholder="000000" maxlength="6"
+                        style="text-align: center; font-size: 1.5rem; letter-spacing: 5px;">
+                </div>
+                <button class="primary-btn" id="btnVerificarOtp">Confirmar Acceso</button>
+                <button class="secondary-btn" id="btnVolverLogin" style="margin-top: 10px;">Volver</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-container" style="display: none;">
         <!-- Sidebar -->
         <aside class="sidebar glass-panel">
             <div class="logo-area">
@@ -29,8 +66,8 @@
                     </svg>
                 </div>
                 <div>
-                    <h2>UCuenca <span>TEC</span></h2>
-                    <p>Gestión Inteligente de Aula</p>
+                    <h2>Smart <span>Stock</span></h2>
+                    <p>Sistema de acceso e inventario</p>
                 </div>
             </div>
             <nav class="nav-menu">
@@ -69,6 +106,13 @@
                     </svg>
                     <span>Gestión de Docentes</span>
                 </button>
+                <button class="nav-btn" data-target="panel-usuarios-web">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
+                        <path fill="currentColor"
+                            d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
+                    </svg>
+                    <span>Usuarios Plataforma</span>
+                </button>
             </nav>
             <div class="sidebar-footer">
                 <div class="system-status">
@@ -79,8 +123,8 @@
                     <p id="system-time">--:--:--</p>
                 </div>
                 <div class="sim-panel glass-panel">
-                    <h4>🛠️ Modo Desarrollador</h4>
-                    <button class="seed-btn" id="btnSeedData">⚡ Inyectar Datos Semilla</button>
+                    <h4>Modo Desarrollador</h4>
+                    <button class="seed-btn" id="btnSeedData">Inyectar Datos Semilla</button>
                 </div>
             </div>
         </aside>
@@ -176,6 +220,54 @@
                     <h1>Inventario Físico del Aula</h1>
                     <p>Control exacto del material de laboratorio e instrumental en el aula</p>
                 </header>
+
+                <!-- Formulario Agregar Producto -->
+                <div class="form-container glass-panel" style="margin-bottom: 25px; padding: 20px;">
+                    <h2 style="font-size: 1.1rem; margin-bottom: 15px;">Agregar Producto al Inventario</h2>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>ID Producto</label>
+                            <input type="text" id="invId" placeholder="Autogenerado..." readonly
+                                style="padding: 8px 12px; font-size: 0.85rem; background: rgba(0,0,0,0.2); cursor: not-allowed;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Nombre</label>
+                            <input type="text" id="invNombre" placeholder="Ej. Monitor"
+                                style="padding: 8px 12px; font-size: 0.85rem;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Stock</label>
+                            <input type="number" id="invStock" placeholder="Ej. 10"
+                                style="padding: 8px 12px; font-size: 0.85rem;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Ubicación</label>
+                            <input type="text" id="invUbicacion" placeholder="Ej. Estante A"
+                                style="padding: 8px 12px; font-size: 0.85rem;">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Categoría</label>
+                            <select id="invCategoria" style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
+                                <option value="Hardware">Hardware</option>
+                                <option value="Herramientas">Herramientas</option>
+                                <option value="Otros">Otros</option>
+                                <option value="Equipos de Medición">Equipos de Medición</option>
+                                <option value="Accesorios">Accesorios</option>
+                            </select>
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Estado del Equipo</label>
+                            <select id="invEstado" style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
+                                <option value="Funcional">Funcional</option>
+                                <option value="No Funcional">No Funcional</option>
+                            </select>
+                        </div>
+                        <button class="primary-btn" id="btnAgregarInventario"
+                            style="padding: 10px; font-size: 0.85rem; height: 38px;">Agregar</button>
+                    </div>
+                </div>
+
                 <div class="table-container glass-panel">
                     <table class="data-table">
                         <thead>
@@ -183,7 +275,10 @@
                                 <th>Código QR (ID)</th>
                                 <th>Nombre del Material</th>
                                 <th>Stock Disponible</th>
-                                <th>Acción</th>
+                                <th>Ubicación</th>
+                                <th>Categoría</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="listaInventario">
@@ -193,49 +288,23 @@
                 </div>
             </section>
 
-            <!-- PANEL: GENERAR QR -->
+            <!-- PANEL: BUSCADOR Y ETIQUETAS QR -->
             <section id="panel-qr" class="panel">
                 <header class="panel-header">
-                    <h1>Alta de Nuevo Material</h1>
-                    <p>Registra equipamiento y genera su etiqueta con código QR</p>
+                    <h1>Buscador Avanzado y Etiquetas QR</h1>
+                    <p>Filtra el inventario en tiempo real y exporta las etiquetas físicas listas para imprimir</p>
                 </header>
-                <div class="form-grid">
-                    <div class="form-container glass-panel">
-                        <h2>Datos del Producto</h2>
-                        <div class="input-group">
-                            <label>Identificador Único (ID)</label>
-                            <input type="text" id="prodId" placeholder="Ej. QR_MULTIMETRO_A">
-                        </div>
-                        <div class="input-group">
-                            <label>Nombre del Producto</label>
-                            <input type="text" id="prodNombre" placeholder="Ej. Osciloscopio Digital 100MHz">
-                        </div>
-                        <div class="input-group">
-                            <label>Cantidad Inicial (Stock)</label>
-                            <input type="number" id="prodStock" placeholder="Ej. 5">
-                        </div>
-                        <button class="primary-btn" id="btnGuardarProd">✨ Registrar y Generar Etiqueta</button>
+                <div class="search-container glass-panel" style="padding: 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                    <div style="flex: 1; position: relative;">
+                        <input type="text" id="qrSearchInput" placeholder="Buscar por Nombre, ID, Ubicación o Categoría..." style="width: 100%; padding: 12px 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); color: white; font-size: 1rem;">
                     </div>
-
-                    <div class="qr-result-area glass-panel" id="qrResultArea" style="display:none;">
-                        <h2>Etiqueta QR Generada</h2>
-                        <p class="qr-instructions">Esta etiqueta puede imprimirse y pegarse físicamente sobre el
-                            producto.</p>
-                        <div class="printable-badge">
-                            <div class="badge-header">UCUENCA - INVENTARIO IOT</div>
-                            <div id="qrPreview"></div>
-                            <div class="badge-footer">
-                                <span id="qrLabel">ID_PROD</span>
-                            </div>
-                        </div>
-                        <button class="secondary-btn" id="btnPrintQR">
-                            <svg viewBox="0 0 24 24" width="18" height="18">
-                                <path fill="currentColor"
-                                    d="M18,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z" />
-                            </svg>
-                            Imprimir Etiqueta
-                        </button>
-                    </div>
+                    <button class="primary-btn" id="btnExportarPdfLabels" style="display: flex; align-items: center; gap: 8px; height: 45px; padding: 0 20px;">
+                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z"/></svg>
+                        <span>Exportar Etiquetas a PDF</span>
+                    </button>
+                </div>
+                <div class="labels-print-grid" id="labelsPrintGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                    <!-- Etiquetas físicas generadas dinámicamente -->
                 </div>
             </section>
 
@@ -288,7 +357,11 @@
                             <label>Rol / Permiso</label>
                             <input type="text" id="userRol" placeholder="Ej. Docente, Administrador, Técnico">
                         </div>
-                        <button class="primary-btn" id="btnGuardarUsuario">🔑 Autorizar Tarjeta RFID</button>
+                        <div class="input-group">
+                            <label>Correo Electrónico</label>
+                            <input type="email" id="userCorreo" placeholder="Ej. usuario@ucuenca.edu.ec">
+                        </div>
+                        <button class="primary-btn" id="btnGuardarUsuario">Autorizar Tarjeta RFID</button>
                     </div>
 
                     <!-- Tabla de Usuarios Autorizados -->
@@ -300,10 +373,70 @@
                                     <th>UID Tarjeta</th>
                                     <th>Nombre del Docente</th>
                                     <th>Rol</th>
-                                    <th>Acción</th>
+                                    <th>Correo</th>
+                                    <th>Acceso Web</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="listaUsuarios">
+                                <!-- Datos cargados dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: GESTIÓN DE USUARIOS DE PLATAFORMA -->
+            <section id="panel-usuarios-web" class="panel">
+                <header class="panel-header">
+                    <h1>Usuarios de Plataforma (Web)</h1>
+                    <p>Administración de cuentas con acceso al panel de administración del Dashboard</p>
+                </header>
+                <div class="form-grid">
+                    <!-- Formulario de Registro de Usuario Web -->
+                    <div class="form-container glass-panel">
+                        <h2 id="webUserFormTitle">Registrar Nuevo Usuario Web</h2>
+                        <div class="input-group">
+                            <label>ID de Operador (Identificador Único)</label>
+                            <input type="text" id="webUserOperatorId" placeholder="Ej. ADM_002">
+                        </div>
+                        <div class="input-group">
+                            <label>Nombre de Usuario</label>
+                            <input type="text" id="webUserUsername" placeholder="Ej. carlos97">
+                        </div>
+                        <div class="input-group">
+                            <label>Contraseña Web</label>
+                            <input type="password" id="webUserPassword" placeholder="••••••••">
+                        </div>
+                        <div class="input-group">
+                            <label>Correo Electrónico</label>
+                            <input type="email" id="webUserCorreo" placeholder="Ej. admin2@ucuenca.edu.ec">
+                        </div>
+                        <div class="input-group">
+                            <label>Rol / Permiso</label>
+                            <select id="webUserRol" style="padding: 10px; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%;">
+                                <option value="SuperAdmin">SuperAdmin</option>
+                                <option value="Administrador">Administrador</option>
+                                <option value="Operador">Operador</option>
+                            </select>
+                        </div>
+                        <button class="primary-btn" id="btnGuardarWebUsuario">Registrar Usuario Web</button>
+                    </div>
+
+                    <!-- Tabla de Usuarios Web Autorizados -->
+                    <div class="table-container glass-panel">
+                        <h2>Usuarios con Acceso Web</h2>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID Operador</th>
+                                    <th>Usuario</th>
+                                    <th>Correo</th>
+                                    <th>Rol</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listaUsuariosWeb">
                                 <!-- Datos cargados dinámicamente -->
                             </tbody>
                         </table>
@@ -315,6 +448,50 @@
     </div>
     <!-- Script de Inicialización y Lógica -->
     <script type="module" src="app.js"></script>
+
+    <div id="modalTarjetaDesconocida" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-panel animate-fade-in">
+            <div class="modal-header">
+                <span class="warning-icon">⚠️</span>
+                <h2>Acceso Denegado: Tarjeta No Registrada</h2>
+            </div>
+            <p>Se ha detectado un intento de acceso con un UID desconocido en la puerta:</p>
+            <div class="uid-highlight">
+                <span id="modalUidText">00 00 00 00</span>
+            </div>
+            <p style="margin-bottom: 15px; color: var(--text-muted);">¿Deseas autorizar esta tarjeta para dar acceso al
+                personal?</p>
+
+            <div class="modal-form" style="text-align: left; margin-top: 15px;">
+                <div class="input-group">
+                    <label for="modalUserNombre">Nombre del Personal</label>
+                    <input type="text" id="modalUserNombre" placeholder="Ej. Ing. Carlos Alvarado"
+                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                </div>
+                <div class="input-group" style="margin-top: 15px;">
+                    <label for="modalUserRol">Rol / Permiso</label>
+                    <input type="text" id="modalUserRol" placeholder="Ej. Investigador, Pasante"
+                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                </div>
+                <div class="input-group" style="margin-top: 15px;">
+                    <label for="modalUserCorreo">Correo Electrónico</label>
+                    <input type="email" id="modalUserCorreo" placeholder="Ej. personal@ucuenca.edu.ec"
+                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                </div>
+            </div>
+
+            <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 20px;">
+                <button id="btnCancelarModal"
+                    style="flex: 1; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--glass-border); cursor: pointer; font-weight: 600;">❌
+                    Cancelar</button>
+                <button id="btnRegistrarModal"
+                    style="flex: 1; padding: 10px; border-radius: 8px; background: var(--primary); color: white; border: none; cursor: pointer; font-weight: 600;">🔑
+                    Registrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
 </body>
 
 </html>

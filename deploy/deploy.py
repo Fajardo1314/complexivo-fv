@@ -5,7 +5,7 @@ import paramiko
 
 # Agregar el directorio principal al PATH para importar las credenciales
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from credentials import SSH_USER, SSH_PASSWORD, SSH_PORT, SSH_HOST_LOCAL
+from credentials import SSH_USER, SSH_PASSWORD, SSH_PORT, SSH_HOST
 
 # Ruta del proyecto en la Raspberry Pi
 REMOTE_DIR = "/home/user/proyecto_grado"
@@ -46,7 +46,7 @@ def subir_directorio(sftp, local_dir, remote_dir):
 def main():
     print("=" * 65)
     print("      AUTOMATIZACION DE DESPLIEGUE A RASPBERRY PI (DOCKER)")
-    print(f"      Host de Destino Local: {SSH_HOST_LOCAL}")
+    print(f"      Host de Destino NetBird: {SSH_HOST}")
     print("=" * 65)
 
     client = paramiko.SSHClient()
@@ -55,7 +55,7 @@ def main():
     try:
         print("\n[*] 1. Conectando a la Raspberry Pi por SSH...")
         client.connect(
-            hostname=SSH_HOST_LOCAL,
+            hostname=SSH_HOST,
             port=SSH_PORT,
             username=SSH_USER,
             password=SSH_PASSWORD,
@@ -163,7 +163,7 @@ def main():
         print("\n" + "=" * 65)
         print("  [EXITO] Despliegue completado satisfactoriamente.")
         print("  Puedes acceder al Dashboard en:")
-        print(f"    - URL Local: http://{SSH_HOST_LOCAL}")
+        print(f"    - URL Local: http://{SSH_HOST}")
         print("    - URL VPN (Netbird): http://raspberryfv.nb")
         print("=" * 65)
 

@@ -337,6 +337,7 @@ def ver_equipo(id_equipo):
         nombre = equipo.get("nombre_producto", "Material Desconocido")
         stock = equipo.get("stock", 0)
         categoria = equipo.get("categoria", "Equipos")
+        estado = equipo.get("estado", "Funcional")
         
         html_responsivo = f"""
         <!DOCTYPE html>
@@ -453,6 +454,14 @@ def ver_equipo(id_equipo):
                 <div class="info-item">
                     <span class="label">Categoría</span>
                     <span class="value" style="color:var(--primary);">{categoria}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Estado del Equipo</span>
+                    <span class="value">
+                        <span class="badge { 'badge-green' if estado == 'Funcional' else 'badge-red' }">
+                            {estado}
+                        </span>
+                    </span>
                 </div>
                 <div class="info-item">
                     <span class="label">Disponibilidad</span>

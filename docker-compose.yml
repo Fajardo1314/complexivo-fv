@@ -7,7 +7,6 @@ services:
       dockerfile: Dockerfile.control
     container_name: backend-control
     restart: unless-stopped
-    network_mode: host
     privileged: true
     devices:
       - "/dev/gpiomem:/dev/gpiomem"
@@ -15,6 +14,8 @@ services:
       # Exponer SPI si están disponibles
       - "/dev/spidev0.0:/dev/spidev0.0"
       - "/dev/spidev0.1:/dev/spidev0.1"
+    ports:
+      - "5000:5000"
 
   backend-automation:
     build:
@@ -40,11 +41,14 @@ services:
   # ─── Node-RED: Dashboard y automatización visual ───────────────────────────
   # Acceso: http://raspberryfv.nb:1880       (editor)
   #         http://raspberryfv.nb:1880/ui    (dashboard)
+  #         MQTT: Puerto 1883
   nodered:
     image: nodered/node-red:latest
     container_name: nodered
     restart: unless-stopped
-    network_mode: host # Comparte IP con la Pi → puede llamar a Flask en 127.0.0.1:5000
+    ports:
+      - "1880:1880"
+      - "1883:1883"
     user: root # Necesario para ejecutar comandos del sistema
     environment:
       - TZ=America/Guayaquil
