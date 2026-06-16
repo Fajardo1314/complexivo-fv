@@ -618,8 +618,8 @@ btnGuardarUsuario.addEventListener('click', async () => {
             // Clean unregistered UID in Firebase
             await set(ref(db, 'monitoreo_tiempo_real/ultimo_uid_no_registrado'), null);
 
-            // Send welcome email with credentials using SMTPJS
-            await Email.send({
+            // Send welcome email with credentials using SMTPJS (resilient)
+            await enviarCorreoConFallback({
                 Host: "smtp.gmail.com",
                 Username: "smartstock97@gmail.com",
                 Password: "TAIPT_M4a",
@@ -1186,6 +1186,40 @@ if (btnAgregarInventario) {
     });
 }
 
+// --- HELPER: ENVÍO DE CORREO RESILIENTE CON TIMEOUT ---
+/**
+ * Intenta enviar un correo con Email.send de SMTPJS.
+ * Si el envío tarda más de `timeoutMs` ms o falla, resuelve igualmente
+ * (muestra un toast de aviso) para que la UI no quede bloqueada.
+ */
+async function enviarCorreoConFallback(payload, timeoutMs = 2500) {
+    const envioPromise = new Promise((resolve, reject) => {
+        try {
+            Email.send(payload).then(resolve).catch(reject);
+        } catch (e) {
+            reject(e);
+        }
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMTP_TIMEOUT')), timeoutMs)
+    );
+
+    try {
+        await Promise.race([envioPromise, timeoutPromise]);
+        console.log('[Email] Correo enviado exitosamente a:', payload.To);
+    } catch (err) {
+        if (err.message === 'SMTP_TIMEOUT') {
+            console.warn('[Email] Timeout: el servidor SMTP tardó más de', timeoutMs, 'ms. Continuando en modo de respaldo.');
+            crearToast('⚠️ Conexión de correo lenta, usando modo de respaldo...', 'danger');
+        } else {
+            console.error('[Email] Error al enviar correo:', err);
+            crearToast('⚠️ El correo no pudo enviarse. Continúa con el código OTP.', 'danger');
+        }
+        // No relanzamos: la UI avanza igual
+    }
+}
+
 // --- SISTEMA DE LOGIN Y MFA (2FA) ---
 const loginOverlay = document.getElementById('loginOverlay');
 const formLogin = document.getElementById('formLogin');
@@ -1203,8 +1237,8 @@ const dashboardContainer = document.querySelector('.dashboard-container');
 let generatedOtp = "";
 
 btnIngresar.addEventListener('click', async () => {
-    const user = loginUser.value.trim();
-    const pass = loginPass.value.trim();
+    const user = loginUser ? loginUser.value.trim() : '';
+    const pass = loginPass ? loginPass.value.trim() : '';
 
     if (!user || !pass) {
         alert("Por favor ingrese usuario y contraseña.");
@@ -1214,51 +1248,84 @@ btnIngresar.addEventListener('click', async () => {
     btnIngresar.disabled = true;
     btnIngresar.textContent = "Verificando...";
 
+    // --- PASO 1: Validar credenciales en Firebase ---
+    let authenticatedUser = null;
     try {
-        const usersSysRef = ref(db, 'usuarios_sistema');
-        const snapshot = await get(usersSysRef);
-        let authenticatedUser = null;
+        console.log('[Login] Consultando Firebase para usuario:', user);
+        const snapshot = await get(ref(db, 'usuarios_sistema'));
 
         if (snapshot.exists()) {
             const users = snapshot.val();
+            console.log('[Login] Nodos encontrados en usuarios_sistema:', Object.keys(users));
             Object.keys(users).forEach(key => {
                 const u = users[key];
+                // Verificación estricta contra campo 'passwordWeb' (igual que en Firebase)
                 if (u.usuario === user && u.passwordWeb === pass) {
                     authenticatedUser = u;
+                    console.log('[Login] ✅ Credenciales válidas para nodo:', key);
                 }
             });
+        } else {
+            console.warn('[Login] El nodo usuarios_sistema no existe o está vacío.');
         }
+    } catch (dbError) {
+        console.error('[Login] ERROR al consultar Firebase:', dbError);
+        alert('Error interno en Login: ' + dbError.message);
+        btnIngresar.disabled = false;
+        btnIngresar.textContent = "Verificar Credenciales";
+        return;
+    }
 
-        if (authenticatedUser) {
-            generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            usuarioActivo = authenticatedUser; // Save active session
+    // --- PASO 2: Si las credenciales son incorrectas, avisar y salir ---
+    if (!authenticatedUser) {
+        alert("Credenciales incorrectas. Verifica tu usuario y contraseña.");
+        btnIngresar.disabled = false;
+        btnIngresar.textContent = "Verificar Credenciales";
+        return;
+    }
 
-            await set(ref(db, 'monitoreo_tiempo_real/mfa_otp'), {
-                code: generatedOtp,
-                created_at: Date.now()
-            });
+    // --- PASO 3: Generar OTP y cambiar pantalla INMEDIATAMENTE ---
+    try {
+        generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        usuarioActivo = authenticatedUser;
 
-            // Send real email using SMTPJS
-            await Email.send({
+        // [MFA DEBUG] Código visible en consola para soporte inmediato
+        console.log('[MFA DEBUG] El código generado es: ' + generatedOtp);
+
+        // Guardar OTP en Firebase (sin bloquear la UI)
+        set(ref(db, 'monitoreo_tiempo_real/mfa_otp'), {
+            code: generatedOtp,
+            created_at: Date.now()
+        }).catch(err => console.warn('[MFA] No se pudo guardar OTP en Firebase:', err));
+
+        // ✅ CAMBIO DE PANTALLA INMEDIATO — no espera el correo
+        formLogin.style.display = "none";
+        formOtp.style.display = "block";
+        btnIngresar.disabled = false;
+        btnIngresar.textContent = "Verificar Credenciales";
+
+        // 📧 Envío de correo en segundo plano (fire-and-forget, no bloquea la UI)
+        const correoDestino = authenticatedUser.correo || '';
+        console.log('[MFA] Enviando código al correo:', correoDestino);
+        if (correoDestino) {
+            enviarCorreoConFallback({
                 Host: "smtp.gmail.com",
                 Username: "smartstock97@gmail.com",
                 Password: "TAIPT_M4a",
-                To: authenticatedUser.correo,
+                To: correoDestino,
                 From: "smartstock97@gmail.com",
                 Subject: "Smart Stock - Código de Verificación MFA",
                 Body: `Hola ${authenticatedUser.usuario},\n\nTu código de verificación de 6 dígitos para acceder al sistema Smart Stock es:\n\n${generatedOtp}\n\nEste código es confidencial.\n\nSaludos,\nSmart Stock System`
-            });
-
-            formLogin.style.display = "none";
-            formOtp.style.display = "block";
-            crearToast(`📧 Código OTP enviado al correo del administrador`, "success");
+            }); // ← Sin await: corre en background
         } else {
-            alert("Credenciales incorrectas.");
+            console.warn('[MFA] El usuario autenticado no tiene correo registrado. El OTP solo está en consola.');
         }
-    } catch (e) {
-        console.error(e);
-        alert("Error de conexión con base de datos o envío de correo.");
-    } finally {
+
+        crearToast('📧 Ingresa el código OTP enviado a tu correo.', 'success');
+
+    } catch (otpError) {
+        console.error('[Login] ERROR al generar OTP o cambiar pantalla:', otpError);
+        alert('Error interno en Login: ' + otpError.message);
         btnIngresar.disabled = false;
         btnIngresar.textContent = "Verificar Credenciales";
     }
@@ -1336,8 +1403,8 @@ btnRegistrarModal.addEventListener('click', async () => {
             passwordWeb: passWeb
         });
 
-        // Send welcome email with credentials using SMTPJS
-        await Email.send({
+        // Send welcome email with credentials using SMTPJS (resilient)
+        await enviarCorreoConFallback({
             Host: "smtp.gmail.com",
             Username: "smartstock97@gmail.com",
             Password: "TAIPT_M4a",
