@@ -279,7 +279,7 @@ onValue(ref(db, 'inventario'), (snapshot) => {
                 <td>
                     <button class="edit-btn" data-id="${key}">Editar</button>
                     <button class="delete-btn" data-id="${key}">Eliminar</button>
-                    <button class="qr-btn" data-id="${key}" data-nombre="${prod.nombre_producto}" style="padding:6px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4); color:var(--primary); border-radius:8px; font-weight:600; cursor:pointer; transition:all 0.2s;">👁️ QR</button>
+                    <button class="qr-btn" data-id="${key}" data-nombre="${prod.nombre_producto}" style="padding:6px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4); color:var(--primary); border-radius:8px; font-weight:600; cursor:pointer; transition:all 0.2s;">QR</button>
                 </td>
             `;
             tr.querySelector('.qr-btn').addEventListener('click', (e) => {
@@ -350,7 +350,7 @@ onValue(ref(db, 'usuarios'), (snapshot) => {
         Object.keys(data).forEach(key => {
             const user = data[key];
             const tr = document.createElement('tr');
-            const credsWeb = user.usuarioWeb 
+            const credsWeb = user.usuarioWeb
                 ? `<span style="font-size:0.8rem; font-family:monospace; color:var(--primary);">User: ${user.usuarioWeb}<br>Pass: ${user.passwordWeb}</span>`
                 : '<span style="color:var(--text-muted);">---</span>';
             tr.innerHTML = `
@@ -442,11 +442,11 @@ function cargarFormularioWebUsuario(key, user) {
     webUserPassword.value = user.passwordWeb || '';
     webUserCorreo.value = user.correo || '';
     webUserRol.value = user.rol || 'Operador';
-    
+
     webUserFormTitle.textContent = "Editar Usuario Web";
     btnGuardarWebUsuario.textContent = "Guardar Cambios";
     editingWebUserId = key;
-    
+
     // Scroll smoothly
     webUserOperatorId.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
 }
@@ -477,10 +477,10 @@ if (btnGuardarWebUsuario) {
                     correo: correo,
                     rol: rol
                 });
-                
+
                 await registrarAuditoria('Edición Usuario Plataforma', `Usuario editado: ${username} (ID: ${opId})`);
                 crearToast(`✏️ Usuario ${username} actualizado con éxito`, "success");
-                
+
                 // Reset state
                 editingWebUserId = null;
                 webUserOperatorId.readOnly = false;
@@ -566,7 +566,7 @@ function cargarFormularioDocente(uid, user) {
     document.getElementById('userCorreo').value = user.correo || '';
     btnGuardarUsuario.textContent = "Guardar Cambios";
     editingDocenteUid = uid;
-    
+
     // Scroll smoothly to form
     userUid.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
 }
@@ -603,7 +603,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
 
             await registrarAuditoria('Edición Docente', `Docente editado: ${nombre} (UID: ${editingDocenteUid})`);
             crearToast(`✏️ Docente ${editingDocenteUid} actualizado correctamente.`, 'success');
-            
+
             // Reset Edit state
             editingDocenteUid = null;
             userUid.readOnly = false;
@@ -978,7 +978,7 @@ async function autogenerarProductId(nombre) {
     const cleanName = nombre.trim().replace(/[^a-zA-Z]/g, "").toUpperCase();
     let code = cleanName.substring(0, 3);
     while (code.length < 3) code += "X";
-    
+
     try {
         const snapshot = await get(ref(db, 'inventario'));
         let maxCounter = 0;
@@ -1037,10 +1037,10 @@ function cargarFormularioProducto(id, prod) {
     document.getElementById('invUbicacion').value = prod.ubicacion || '';
     document.getElementById('invCategoria').value = prod.categoria || 'Hardware';
     document.getElementById('invEstado').value = prod.estado || 'Funcional';
-    
+
     btnAgregarInventario.textContent = "Guardar Cambios";
     editingProductId = id;
-    
+
     // Scroll smoothly to form
     invIdInput.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
 }
@@ -1070,17 +1070,17 @@ if (btnAgregarInventario) {
                     categoria: categoria,
                     estado: estado
                 });
-                
+
                 await registrarAuditoria('Edición Producto', `Producto editado: ${nombre} (ID: ${editingProductId})`);
                 crearToast(`✏️ Producto ${editingProductId} actualizado con éxito`, "success");
-                
+
                 // Reset state
                 editingProductId = null;
                 btnAgregarInventario.textContent = "Agregar";
             } else {
                 // Modo Agregar
                 const finalId = id || (await autogenerarProductId(nombre));
-                
+
                 const snapshot = await get(ref(db, `inventario/${finalId}`));
                 if (snapshot.exists()) {
                     alert("Error: El ID del producto autogenerado ya existe.");
@@ -1373,9 +1373,9 @@ btnCancelarModal.addEventListener('click', async () => {
 function actualizarEtiquetasQR() {
     if (!labelsPrintGrid) return;
     labelsPrintGrid.innerHTML = '';
-    
+
     const query = qrSearchInput ? qrSearchInput.value.toLowerCase().trim() : '';
-    
+
     let count = 0;
     Object.keys(todosLosProductos).forEach(key => {
         const prod = todosLosProductos[key];
@@ -1383,7 +1383,7 @@ function actualizarEtiquetasQR() {
         const id = key.toLowerCase();
         const ubicacion = (prod.ubicacion || '').toLowerCase();
         const categoria = (prod.categoria || '').toLowerCase();
-        
+
         if (query === '' || nombre.includes(query) || id.includes(query) || ubicacion.includes(query) || categoria.includes(query)) {
             count++;
             const div = document.createElement('div');
@@ -1396,7 +1396,7 @@ function actualizarEtiquetasQR() {
                 </div>
             `;
             labelsPrintGrid.appendChild(div);
-            
+
             const qrUrl = `https://smartstock.eu1.netbird.services/nodered/form-retiro?id_producto=${key}`;
             if (typeof QRCode !== 'undefined') {
                 new QRCode(document.getElementById(`qr-preview-${key}`), {
@@ -1412,7 +1412,7 @@ function actualizarEtiquetasQR() {
             }
         }
     });
-    
+
     if (count === 0) {
         labelsPrintGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px 0;">No se encontraron productos coincidentes.</p>';
     }
