@@ -106,11 +106,13 @@ def main():
 
         # --- 4. Subir archivos por SFTP ---
         print("\n[*] 4. Subiendo código fuente y configuración...")
+        
+        # Crear carpeta de destino y asegurar permisos para evitar Permission Denied de Docker mounts
+        ejecutar_comando(client, f"mkdir -p {REMOTE_DIR} {REMOTE_DIR}/nodered_data", run_as_sudo=True)
+        ejecutar_comando(client, f"chown -R {SSH_USER}:{SSH_USER} {REMOTE_DIR}", run_as_sudo=True)
+        
         sftp = client.open_sftp()
         base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        
-        # Crear carpeta de destino
-        ejecutar_comando(client, f"mkdir -p {REMOTE_DIR}")
         
         # Subir archivos raíz
         archivos_raiz = [
@@ -136,6 +138,9 @@ def main():
 
         # Subir directorio del web dashboard
         subir_directorio(sftp, os.path.join(base_path, "web_dashboard"), f"{REMOTE_DIR}/web_dashboard")
+        
+        # Subir directorio de nodered_data
+        subir_directorio(sftp, os.path.join(base_path, "nodered_data"), f"{REMOTE_DIR}/nodered_data")
         sftp.close()
         print("[OK] Carga de archivos completada.")
 

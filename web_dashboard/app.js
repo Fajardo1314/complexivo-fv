@@ -210,18 +210,7 @@ onValue(ref(db, 'monitoreo_tiempo_real'), (snapshot) => {
             cardChapa.querySelector('.metric-sub').innerText = "Puerta asegurada";
         }
 
-        // Foco
-        const focoState = data.estado_foco || 'APAGADO';
-        estadoFoco.innerText = focoState;
-        if (focoState === 'ENCENDIDO') {
-            cardFoco.style.borderColor = 'rgba(245, 158, 11, 0.4)';
-            cardFoco.style.boxShadow = '0 10px 30px rgba(245, 158, 11, 0.15)';
-            subFoco.innerText = "Luz artificial activada";
-        } else {
-            cardFoco.style.borderColor = '';
-            cardFoco.style.boxShadow = '';
-            subFoco.innerText = "Luz artificial desactivada";
-        }
+        // Foco (Manejado por listener independiente de monitoreo/estado_foco)
 
         // PIR y Alerta Combinada
         if (chapaState === "CERRADA" && data.alerta_pir) {
@@ -249,6 +238,22 @@ onValue(ref(db, 'monitoreo_tiempo_real'), (snapshot) => {
 
             detenerAlertaCritica();
         }
+    }
+});
+
+// --- FIREBASE: CONTROL FOCO INTELIGENTE MERCURY ---
+onValue(ref(db, 'monitoreo/estado_foco'), (snapshot) => {
+    const isEncendido = snapshot.val();
+    if (isEncendido === true || isEncendido === "true") {
+        estadoFoco.innerHTML = '<span class="badge badge-green" style="box-shadow: 0 0 10px rgba(16,185,129,0.5);">💡 Encendido</span>';
+        cardFoco.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        cardFoco.style.boxShadow = '0 10px 30px rgba(16, 185, 129, 0.15)';
+        subFoco.innerText = "Luz artificial activada";
+    } else {
+        estadoFoco.innerHTML = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">⚫ Apagado</span>';
+        cardFoco.style.borderColor = '';
+        cardFoco.style.boxShadow = '';
+        subFoco.innerText = "Luz artificial desactivada";
     }
 });
 
