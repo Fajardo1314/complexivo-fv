@@ -72,6 +72,16 @@ const estadoFoco = document.getElementById('estadoFoco');
 const cardFoco = document.getElementById('cardFoco');
 const subFoco = document.getElementById('subFoco');
 
+const estadoPuerta = document.getElementById('estadoPuerta');
+const cardPuerta = document.getElementById('cardPuerta');
+const subPuerta = document.getElementById('subPuerta');
+const iconPuerta = document.getElementById('iconPuerta');
+
+const estadoInfrarrojo = document.getElementById('estadoInfrarrojo');
+const cardInfrarrojo = document.getElementById('cardInfrarrojo');
+const subInfrarrojo = document.getElementById('subInfrarrojo');
+const iconInfrarrojo = document.getElementById('iconInfrarrojo');
+
 const listaInventario = document.getElementById('listaInventario');
 const listaAccesos = document.getElementById('listaAccesos');
 const listaUsuarios = document.getElementById('listaUsuarios');
@@ -254,6 +264,78 @@ onValue(ref(db, 'monitoreo/estado_foco'), (snapshot) => {
         cardFoco.style.borderColor = '';
         cardFoco.style.boxShadow = '';
         subFoco.innerText = "Luz artificial desactivada";
+    }
+});
+
+// --- FIREBASE: CONTROL SENSORES ADICIONALES ---
+// Sensor PIR
+onValue(ref(db, 'monitoreo/pir'), (snapshot) => {
+    const val = snapshot.val();
+    const isMovimiento = (val === true || val === "true" || val === "Movimiento Detectado");
+    if (isMovimiento) {
+        estadoPir.innerText = "🚨 MOVIMIENTO";
+        subAlerta.innerText = "¡Movimiento detectado!";
+        cardAlerta.classList.add('alert-danger');
+        cardAlerta.classList.remove('card-secure');
+        iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
+    } else {
+        estadoPir.innerText = "Seguro";
+        subAlerta.innerText = "No se detecta movimiento";
+        cardAlerta.classList.remove('alert-danger');
+        cardAlerta.classList.add('card-secure');
+        iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z"/></svg>`;
+    }
+});
+
+// Sensor Puerta
+onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
+    const val = snapshot.val();
+    const isOpen = (val === true || val === "true" || val === "ABIERTA");
+    if (isOpen) {
+        if (estadoPuerta) estadoPuerta.innerText = "ABIERTA";
+        if (subPuerta) subPuerta.innerText = "Puerta física abierta";
+        if (cardPuerta) {
+            cardPuerta.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+            cardPuerta.style.boxShadow = '0 10px 30px rgba(239, 68, 68, 0.15)';
+            cardPuerta.classList.remove('card-secure');
+            cardPuerta.classList.add('alert-danger');
+        }
+        if (iconPuerta) iconPuerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19,4H5A2,2 0 0,0 3,6V18A2,2 0 0,0 5,20H19A2,2 0 0,0 21,18V6A2,2 0 0,0 19,4M19,18H5V6H19V18Z"/></svg>`;
+    } else {
+        if (estadoPuerta) estadoPuerta.innerText = "CERRADA";
+        if (subPuerta) subPuerta.innerText = "Puerta física cerrada";
+        if (cardPuerta) {
+            cardPuerta.style.borderColor = '';
+            cardPuerta.style.boxShadow = '';
+            cardPuerta.classList.add('card-secure');
+            cardPuerta.classList.remove('alert-danger');
+        }
+        if (iconPuerta) iconPuerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19,4H5A2,2 0 0,0 3,6V18A2,2 0 0,0 5,20H19A2,2 0 0,0 21,18V6A2,2 0 0,0 19,4M19,18H5V6H19V18Z"/></svg>`;
+    }
+});
+
+// Sensor Infrarrojo
+onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
+    const val = snapshot.val();
+    const isCruce = (val === true || val === "true" || val === "Ingreso" || val === "Salida");
+    if (isCruce) {
+        if (estadoInfrarrojo) estadoInfrarrojo.innerText = val === true ? "DETECTADO" : val;
+        if (subInfrarrojo) subInfrarrojo.innerText = `Cruce activo (${val === true ? 'Cruce' : val})`;
+        if (cardInfrarrojo) {
+            cardInfrarrojo.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+            cardInfrarrojo.style.boxShadow = '0 10px 30px rgba(245, 158, 11, 0.15)';
+            cardInfrarrojo.classList.remove('card-secure');
+            cardInfrarrojo.classList.add('alert-danger');
+        }
+    } else {
+        if (estadoInfrarrojo) estadoInfrarrojo.innerText = "Normal";
+        if (subInfrarrojo) subInfrarrojo.innerText = "Barrera despejada";
+        if (cardInfrarrojo) {
+            cardInfrarrojo.style.borderColor = '';
+            cardInfrarrojo.style.boxShadow = '';
+            cardInfrarrojo.classList.add('card-secure');
+            cardInfrarrojo.classList.remove('alert-danger');
+        }
     }
 });
 
