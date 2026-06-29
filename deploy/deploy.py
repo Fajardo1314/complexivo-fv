@@ -108,7 +108,7 @@ def main():
         print("\n[*] 4. Subiendo código fuente y configuración...")
         
         # Crear carpeta de destino y asegurar permisos para evitar Permission Denied de Docker mounts
-        ejecutar_comando(client, f"mkdir -p {REMOTE_DIR} {REMOTE_DIR}/nodered_data", run_as_sudo=True)
+        ejecutar_comando(client, f"mkdir -p {REMOTE_DIR} {REMOTE_DIR}/nodered_data {REMOTE_DIR}/mosquitto/config {REMOTE_DIR}/mosquitto/data {REMOTE_DIR}/mosquitto/log", run_as_sudo=True)
         ejecutar_comando(client, f"chown -R {SSH_USER}:{SSH_USER} {REMOTE_DIR}", run_as_sudo=True)
         
         sftp = client.open_sftp()
@@ -141,6 +141,14 @@ def main():
         
         # Subir directorio de nodered_data
         subir_directorio(sftp, os.path.join(base_path, "nodered_data"), f"{REMOTE_DIR}/nodered_data")
+        
+        # Subir directorio de configuración de Mosquitto
+        mosquitto_dir = os.path.join(base_path, "mosquitto")
+        if os.path.exists(mosquitto_dir):
+            subir_directorio(sftp, mosquitto_dir, f"{REMOTE_DIR}/mosquitto")
+        else:
+            print("  [WARNING] Directorio mosquitto no encontrado localmente.")
+        
         sftp.close()
         print("[OK] Carga de archivos completada.")
 
