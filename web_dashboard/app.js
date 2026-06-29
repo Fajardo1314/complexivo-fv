@@ -139,12 +139,12 @@ try {
                 datasets: [{
                     label: 'Personas en el Aula (Historial)',
                     data: [],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    borderColor: '#c8956c',
+                    backgroundColor: 'rgba(200, 149, 108, 0.08)',
                     borderWidth: 3,
                     fill: true,
                     tension: 0.4,
-                    pointBackgroundColor: '#8b5cf6',
+                    pointBackgroundColor: '#d4a574',
                     pointBorderColor: '#fff',
                     pointRadius: 4,
                     pointHoverRadius: 6
@@ -234,7 +234,7 @@ onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
     const val = snapshot.val();
     const isOpen = (val === true || val === "true" || val === "ABIERTA" || val === "abierta" || val === 1 || val === "1");
     currentPuertaState = isOpen ? 'ABIERTA' : 'CERRADA';
-    
+
     estadoChapa.innerText = currentPuertaState;
     if (isOpen) {
         cardChapa.style.borderColor = 'rgba(16, 185, 129, 0.4)';
@@ -655,7 +655,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
             await enviarCorreoConFallback({
                 Host: "smtp.gmail.com",
                 Username: "smartstock97@gmail.com",
-                Password: "TAIPT_M4a",
+                Password: "F@jardo123",
                 To: correo,
                 From: "smartstock97@gmail.com",
                 Subject: "Bienvenido a Smart Stock - Credenciales de Acceso",
@@ -1138,55 +1138,46 @@ if (btnAgregarInventario) {
     });
 }
 
-// --- HELPER: ENVÍO DE CORREO RESILIENTE CON TIMEOUT ---
+// --- HELPER: ENVÍO DE CORREO VÍA BACKEND PYTHON ---
 /**
- * Intenta enviar un correo con Email.send de SMTPJS.
- * Si el envío tarda más de `timeoutMs` ms o falla, resuelve igualmente
- * (muestra un toast de aviso) para que la UI no quede bloqueada.
+ * Envía un correo usando el endpoint /api/send-email del backend Python.
+ * El backend usa smtplib directamente — sin dependencias externas en el frontend.
  */
-async function enviarCorreoConFallback(payload, timeoutMs = 2500) {
-    const envioPromise = new Promise((resolve, reject) => {
-        try {
-            Email.send(payload).then(resolve).catch(reject);
-        } catch (e) {
-            reject(e);
-        }
-    });
-
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('SMTP_TIMEOUT')), timeoutMs)
-    );
-
+async function enviarCorreoConFallback(payload) {
     try {
-        await Promise.race([envioPromise, timeoutPromise]);
-        console.log('[Email] Correo enviado exitosamente a:', payload.To);
-    } catch (err) {
-        if (err.message === 'SMTP_TIMEOUT') {
-            console.warn('[Email] Timeout: el servidor SMTP tardó más de', timeoutMs, 'ms. Continuando en modo de respaldo.');
-            crearToast('⚠️ Conexión de correo lenta, usando modo de respaldo...', 'danger');
+        const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: payload.To,
+                subject: payload.Subject,
+                body: payload.Body
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.ok) {
+            console.log('[Email] Correo enviado exitosamente a:', payload.To);
         } else {
-            console.error('[Email] Error al enviar correo:', err);
-            crearToast('⚠️ El correo no pudo enviarse. Continúa con el código OTP.', 'danger');
+            console.warn('[Email] El servidor respondió con error:', result.error);
+            crearToast('⚠️ No se pudo enviar el correo. Usa el código de la consola (F12).', 'danger');
         }
-        // No relanzamos: la UI avanza igual
+    } catch (err) {
+        console.error('[Email] Error al contactar el backend de correo:', err);
+        crearToast('⚠️ Servicio de correo no disponible. Usa el código de la consola (F12).', 'danger');
     }
 }
 
-// --- SISTEMA DE LOGIN Y MFA (2FA) ---
+// --- SISTEMA DE LOGIN ---
 const loginOverlay = document.getElementById('loginOverlay');
 const formLogin = document.getElementById('formLogin');
-const formOtp = document.getElementById('formOtp');
 
 const loginUser = document.getElementById('loginUser');
 const loginPass = document.getElementById('loginPass');
 const btnIngresar = document.getElementById('btnIngresar');
 
-const loginOtp = document.getElementById('loginOtp');
-const btnVerificarOtp = document.getElementById('btnVerificarOtp');
-const btnVolverLogin = document.getElementById('btnVolverLogin');
 const dashboardContainer = document.querySelector('.dashboard-container');
-
-let generatedOtp = "";
 
 btnIngresar.addEventListener('click', async () => {
     const user = loginUser ? loginUser.value.trim() : '';
@@ -1200,7 +1191,7 @@ btnIngresar.addEventListener('click', async () => {
     btnIngresar.disabled = true;
     btnIngresar.textContent = "Verificando...";
 
-    // --- PASO 1: Validar credenciales en Firebase ---
+    // --- Validar credenciales en Firebase ---
     let authenticatedUser = null;
     try {
         console.log('[Login] Consultando Firebase para usuario:', user);
@@ -1208,97 +1199,37 @@ btnIngresar.addEventListener('click', async () => {
 
         if (snapshot.exists()) {
             const users = snapshot.val();
-            console.log('[Login] Nodos encontrados en usuarios_sistema:', Object.keys(users));
             Object.keys(users).forEach(key => {
                 const u = users[key];
-                // Verificación estricta contra campo 'passwordWeb' (igual que en Firebase)
                 if (u.usuario === user && u.passwordWeb === pass) {
                     authenticatedUser = u;
                     console.log('[Login] ✅ Credenciales válidas para nodo:', key);
                 }
             });
-        } else {
-            console.warn('[Login] El nodo usuarios_sistema no existe o está vacío.');
         }
     } catch (dbError) {
         console.error('[Login] ERROR al consultar Firebase:', dbError);
         alert('Error interno en Login: ' + dbError.message);
         btnIngresar.disabled = false;
-        btnIngresar.textContent = "Verificar Credenciales";
+        btnIngresar.textContent = "Ingresar";
         return;
     }
 
-    // --- PASO 2: Si las credenciales son incorrectas, avisar y salir ---
     if (!authenticatedUser) {
         alert("Credenciales incorrectas. Verifica tu usuario y contraseña.");
         btnIngresar.disabled = false;
-        btnIngresar.textContent = "Verificar Credenciales";
+        btnIngresar.textContent = "Ingresar";
         return;
     }
 
-    // --- PASO 3: Generar OTP y cambiar pantalla INMEDIATAMENTE ---
-    try {
-        generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        usuarioActivo = authenticatedUser;
-
-        // [MFA DEBUG] Código visible en consola para soporte inmediato
-        console.log('[MFA DEBUG] El código generado es: ' + generatedOtp);
-
-        // Guardar OTP en Firebase (sin bloquear la UI)
-        set(ref(db, 'monitoreo_tiempo_real/mfa_otp'), {
-            code: generatedOtp,
-            created_at: Date.now()
-        }).catch(err => console.warn('[MFA] No se pudo guardar OTP en Firebase:', err));
-
-        // ✅ CAMBIO DE PANTALLA INMEDIATO — no espera el correo
-        formLogin.style.display = "none";
-        formOtp.style.display = "block";
-        btnIngresar.disabled = false;
-        btnIngresar.textContent = "Verificar Credenciales";
-
-        // 📧 Envío de correo en segundo plano (fire-and-forget, no bloquea la UI)
-        const correoDestino = authenticatedUser.correo || '';
-        console.log('[MFA] Enviando código al correo:', correoDestino);
-        if (correoDestino) {
-            enviarCorreoConFallback({
-                Host: "smtp.gmail.com",
-                Username: "smartstock97@gmail.com",
-                Password: "TAIPT_M4a",
-                To: correoDestino,
-                From: "smartstock97@gmail.com",
-                Subject: "Smart Stock - Código de Verificación MFA",
-                Body: `Hola ${authenticatedUser.usuario},\n\nTu código de verificación de 6 dígitos para acceder al sistema Smart Stock es:\n\n${generatedOtp}\n\nEste código es confidencial.\n\nSaludos,\nSmart Stock System`
-            }); // ← Sin await: corre en background
-        } else {
-            console.warn('[MFA] El usuario autenticado no tiene correo registrado. El OTP solo está en consola.');
-        }
-
-        crearToast('📧 Ingresa el código OTP enviado a tu correo.', 'success');
-
-    } catch (otpError) {
-        console.error('[Login] ERROR al generar OTP o cambiar pantalla:', otpError);
-        alert('Error interno en Login: ' + otpError.message);
-        btnIngresar.disabled = false;
-        btnIngresar.textContent = "Verificar Credenciales";
-    }
-});
-
-btnVerificarOtp.addEventListener('click', async () => {
-    const pin = loginOtp.value.trim();
-    if (pin === generatedOtp && pin !== "") {
-        loginOverlay.style.display = "none";
-        dashboardContainer.style.display = "flex";
-        crearToast("🔓 Acceso concedido. ¡Bienvenido!", "success");
-        await registrarAuditoria('Inicio Sesión', `Usuario de plataforma inició sesión.`);
-    } else {
-        alert("Código OTP incorrecto o expirado.");
-    }
-});
-
-btnVolverLogin.addEventListener('click', () => {
-    formOtp.style.display = "none";
-    formLogin.style.display = "block";
-    loginOtp.value = "";
+    // --- Acceso directo al Dashboard ---
+    usuarioActivo = authenticatedUser;
+    loginOverlay.style.display = "none";
+    dashboardContainer.style.display = "flex";
+    btnIngresar.disabled = false;
+    btnIngresar.textContent = "Ingresar";
+    crearToast("🔓 Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
+    await registrarAuditoria('Inicio Sesión', `Usuario ${authenticatedUser.usuario} inició sesión.`);
 });
 
 // --- COMPONENTES DEL MODAL INTERACTIVO DE TARJETAS ---
@@ -1359,7 +1290,7 @@ btnRegistrarModal.addEventListener('click', async () => {
         await enviarCorreoConFallback({
             Host: "smtp.gmail.com",
             Username: "smartstock97@gmail.com",
-            Password: "TAIPT_M4a",
+            Password: "F@jardo123",
             To: correo,
             From: "smartstock97@gmail.com",
             Subject: "Bienvenido a Smart Stock - Credenciales de Acceso",

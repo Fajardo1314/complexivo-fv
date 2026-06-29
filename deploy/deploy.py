@@ -151,6 +151,12 @@ def main():
         
         sftp.close()
         print("[OK] Carga de archivos completada.")
+        
+        # Asegurar permisos de directorios de Mosquitto (el contenedor corre como UID 1883)
+        print("  -> Configurando permisos para Mosquitto...")
+        ejecutar_comando(client, f"mkdir -p {REMOTE_DIR}/mosquitto/data {REMOTE_DIR}/mosquitto/log", run_as_sudo=True)
+        ejecutar_comando(client, f"chown -R 1883:1883 {REMOTE_DIR}/mosquitto/data {REMOTE_DIR}/mosquitto/log", run_as_sudo=True)
+        ejecutar_comando(client, f"chmod -R 755 {REMOTE_DIR}/mosquitto", run_as_sudo=True)
 
         # --- 5. Ejecutar Docker Compose ---
         print("\n[*] 5. Levantando orquestacion de contenedores en la Raspberry Pi...")

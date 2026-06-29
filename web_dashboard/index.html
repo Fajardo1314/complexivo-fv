@@ -39,19 +39,6 @@
                 <button class="primary-btn" id="btnIngresar">Verificar Credenciales</button>
             </div>
 
-            <!-- Formulario de OTP (MFA) -->
-            <div id="formOtp" class="auth-step" style="display: none;">
-                <h2>Segundo Factor (MFA)</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Hemos enviado un código OTP de 6 dígitos a su
-                    correo electrónico.</p>
-                <div class="input-group">
-                    <label for="loginOtp">Código PIN</label>
-                    <input type="text" id="loginOtp" placeholder="000000" maxlength="6"
-                        style="text-align: center; font-size: 1.5rem; letter-spacing: 5px;">
-                </div>
-                <button class="primary-btn" id="btnVerificarOtp">Confirmar Acceso</button>
-                <button class="secondary-btn" id="btnVolverLogin" style="margin-top: 10px;">Volver</button>
-            </div>
         </div>
     </div>
 
@@ -196,7 +183,9 @@
                         </div>
                         <div class="metric-details">
                             <h3>Estado de la Iluminación</h3>
-                            <div class="metric-value" id="estadoFoco"><span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">⚫ Apagado</span></div>
+                            <div class="metric-value" id="estadoFoco"><span class="badge"
+                                    style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">⚫
+                                    Apagado</span></div>
                             <p class="metric-sub" id="subFoco">Luz artificial desactivada</p>
                         </div>
                     </div>
@@ -248,7 +237,8 @@
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Categoría</label>
-                            <select id="invCategoria" style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
+                            <select id="invCategoria"
+                                style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
                                 <option value="Hardware">Hardware</option>
                                 <option value="Herramientas">Herramientas</option>
                                 <option value="Otros">Otros</option>
@@ -258,7 +248,8 @@
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Estado del Equipo</label>
-                            <select id="invEstado" style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
+                            <select id="invEstado"
+                                style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
                                 <option value="Funcional">Funcional</option>
                                 <option value="No Funcional">No Funcional</option>
                             </select>
@@ -294,16 +285,24 @@
                     <h1>Buscador Avanzado y Etiquetas QR</h1>
                     <p>Filtra el inventario en tiempo real y exporta las etiquetas físicas listas para imprimir</p>
                 </header>
-                <div class="search-container glass-panel" style="padding: 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center; justify-content: space-between;">
+                <div class="search-container glass-panel"
+                    style="padding: 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center; justify-content: space-between;">
                     <div style="flex: 1; position: relative;">
-                        <input type="text" id="qrSearchInput" placeholder="Buscar por Nombre, ID, Ubicación o Categoría..." style="width: 100%; padding: 12px 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); color: white; font-size: 1rem;">
+                        <input type="text" id="qrSearchInput"
+                            placeholder="Buscar por Nombre, ID, Ubicación o Categoría..."
+                            style="width: 100%; padding: 12px 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); color: white; font-size: 1rem;">
                     </div>
-                    <button class="primary-btn" id="btnExportarPdfLabels" style="display: flex; align-items: center; gap: 8px; height: 45px; padding: 0 20px;">
-                        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z"/></svg>
+                    <button class="primary-btn" id="btnExportarPdfLabels"
+                        style="display: flex; align-items: center; gap: 8px; height: 45px; padding: 0 20px;">
+                        <svg viewBox="0 0 24 24" width="18" height="18">
+                            <path fill="currentColor"
+                                d="M19,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z" />
+                        </svg>
                         <span>Exportar Etiquetas a PDF</span>
                     </button>
                 </div>
-                <div class="labels-print-grid" id="labelsPrintGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                <div class="labels-print-grid" id="labelsPrintGrid"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
                     <!-- Etiquetas físicas generadas dinámicamente -->
                 </div>
             </section>
@@ -414,7 +413,8 @@
                         </div>
                         <div class="input-group">
                             <label>Rol / Permiso</label>
-                            <select id="webUserRol" style="padding: 10px; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%;">
+                            <select id="webUserRol"
+                                style="padding: 10px; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%;">
                                 <option value="SuperAdmin">SuperAdmin</option>
                                 <option value="Administrador">Administrador</option>
                                 <option value="Operador">Operador</option>
