@@ -199,14 +199,14 @@ let currentPirState = false;
 
 function verificarIntrusion() {
     if (currentPuertaState === 'CERRADA' && currentPirState) {
-        estadoPir.innerText = "🚨 INTRUSIÓN";
+        estadoPir.innerText = "[!] INTRUSIÓN";
         subAlerta.innerText = "¡Movimiento con puerta cerrada!";
         cardAlerta.classList.add('alert-danger');
         cardAlerta.classList.remove('card-secure');
         iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
         mostrarAlertaCritica("¡Movimiento detectado con el cerrojo de la puerta CERRADO!");
     } else if (currentPirState) {
-        estadoPir.innerText = "🚨 ALERTA";
+        estadoPir.innerText = "[!] ALERTA";
         subAlerta.innerText = "¡Movimiento detectado!";
         cardAlerta.classList.add('alert-danger');
         cardAlerta.classList.remove('card-secure');
@@ -264,12 +264,12 @@ onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
 onValue(ref(db, 'monitoreo/estado_foco'), (snapshot) => {
     const isEncendido = snapshot.val();
     if (isEncendido === true || isEncendido === "true") {
-        estadoFoco.innerHTML = '<span class="badge badge-green" style="box-shadow: 0 0 10px rgba(16,185,129,0.5);">💡 Encendido</span>';
+        estadoFoco.innerHTML = '<span class="badge badge-green" style="box-shadow: 0 0 10px rgba(16,185,129,0.5);">[Luz] Encendido</span>';
         cardFoco.style.borderColor = 'rgba(16, 185, 129, 0.4)';
         cardFoco.style.boxShadow = '0 10px 30px rgba(16, 185, 129, 0.15)';
         subFoco.innerText = "Luz artificial activada";
     } else {
-        estadoFoco.innerHTML = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">⚫ Apagado</span>';
+        estadoFoco.innerHTML = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">[Off] Apagado</span>';
         cardFoco.style.borderColor = '';
         cardFoco.style.boxShadow = '';
         subFoco.innerText = "Luz artificial desactivada";
@@ -344,8 +344,8 @@ onValue(ref(db, 'accesos'), (snapshot) => {
             // Método de acceso (RFID o Teclado)
             const metodo = acc.metodo_acceso || 'rfid';
             const metodoBadge = metodo === 'teclado'
-                ? '<span class="badge badge-blue">⌨️ Teclado</span>'
-                : '<span class="badge badge-purple">💳 RFID</span>';
+                ? '<span class="badge badge-blue">[Teclado] Teclado</span>'
+                : '<span class="badge badge-purple">[RFID] RFID</span>';
             const codigoRef = acc.codigo_usado ? `<br><span style="color:var(--text-muted); font-size:0.75rem; font-family:monospace;">${acc.codigo_usado}</span>` : '';
 
             const tr = document.createElement('tr');
@@ -502,7 +502,7 @@ if (btnGuardarWebUsuario) {
                 });
 
                 await registrarAuditoria('Edición Usuario Plataforma', `Usuario editado: ${username} (ID: ${opId})`);
-                crearToast(`✏️ Usuario ${username} actualizado con éxito`, "success");
+                crearToast(`[Edit] Usuario ${username} actualizado con éxito`, "success");
 
                 // Reset state
                 editingWebUserId = null;
@@ -540,7 +540,7 @@ if (btnGuardarWebUsuario) {
                 });
 
                 await registrarAuditoria('Registro Usuario Plataforma', `Usuario registrado: ${username} (ID: ${opId})`);
-                crearToast(`✅ Usuario ${username} registrado con éxito`, "success");
+                crearToast(`[OK] Usuario ${username} registrado con éxito`, "success");
             }
 
             // Limpiar formulario
@@ -625,7 +625,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
             });
 
             await registrarAuditoria('Edición Docente', `Docente editado: ${nombre} (UID: ${editingDocenteUid})`);
-            crearToast(`✏️ Docente ${editingDocenteUid} actualizado correctamente.`, 'success');
+            crearToast(`[Edit] Docente ${editingDocenteUid} actualizado correctamente.`, 'success');
 
             // Reset Edit state
             editingDocenteUid = null;
@@ -662,7 +662,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
             });
 
             await registrarAuditoria('Registro Docente', `Docente registrado: ${nombre} (UID: ${uid})`);
-            crearToast('✅ Docente autorizado y credenciales enviadas por correo.', 'success');
+            crearToast('[OK] Docente autorizado y credenciales enviadas por correo.', 'success');
         }
 
         // Clear fields
@@ -754,7 +754,7 @@ if (btnSeedData) btnSeedData.addEventListener('click', async () => {
         };
 
         await update(ref(db), seedData);
-        alert('⚡ Base de datos inicializada con éxito. ¡Ya puedes navegar por el dashboard para ver el sistema en acción!');
+        alert('[!] Base de datos inicializada con éxito. ¡Ya puedes navegar por el dashboard para ver el sistema en acción!');
     } catch (e) {
         console.error(e);
         alert('Error al inyectar datos semilla: ' + e.message);
@@ -772,7 +772,7 @@ function mostrarActividadDocente(nombreDocente) {
     }
     modal.innerHTML = `
         <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:500px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);max-height:80vh;overflow-y:auto;">
-            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">📋 Actividad de ${nombreDocente}</h2>
+            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">[Lista] Actividad de ${nombreDocente}</h2>
             <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;">Últimas acciones registradas en el sistema</p>
             <div id="actividad-list" style="display:flex;flex-direction:column;gap:10px;">
                 <p style="color:var(--text-muted);text-align:center;padding:20px;">Cargando...</p>
@@ -823,7 +823,7 @@ function agregarBotonCambiarContrasena() {
     btnCambiar.className = 'primary-btn';
     btnCambiar.id = 'btnCambiarPass';
     btnCambiar.style.cssText = 'margin-top:10px;background:linear-gradient(135deg,#2980b9,#3498db);box-shadow:0 5px 15px rgba(52,152,219,0.3);';
-    btnCambiar.innerHTML = '🔑 Cambiar Contraseña';
+    btnCambiar.innerHTML = '[Key] Cambiar Contraseña';
     btnCambiar.addEventListener('click', () => {
         let modal = document.getElementById('change-pass-modal');
         if (!modal) {
@@ -834,7 +834,7 @@ function agregarBotonCambiarContrasena() {
         }
         modal.innerHTML = `
             <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:380px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);">
-                <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:20px;">🔑 Cambiar Contraseña</h2>
+                <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:20px;">[Key] Cambiar Contraseña</h2>
                 <div class="input-group"><label>Contraseña Actual</label><input type="password" id="oldPass" placeholder="••••••••"></div>
                 <div class="input-group"><label>Nueva Contraseña</label><input type="password" id="newPass" placeholder="••••••••"></div>
                 <div class="input-group"><label>Confirmar Nueva Contraseña</label><input type="password" id="confirmPass" placeholder="••••••••"></div>
@@ -858,7 +858,7 @@ function agregarBotonCambiarContrasena() {
                 await update(ref(db, `usuarios_sistema/${usuarioActivo.usuario}`), { passwordWeb: newP });
                 usuarioActivo.passwordWeb = newP;
                 modal.style.display = 'none';
-                crearToast('✅ Contraseña actualizada correctamente.', 'success');
+                crearToast('[OK] Contraseña actualizada correctamente.', 'success');
                 await registrarAuditoria('Cambio de Contraseña', 'El usuario cambió su contraseña.');
             } catch (e) {
                 console.error(e);
@@ -962,7 +962,7 @@ function mostrarAlertaCritica(mensaje) {
         }
 
         alertBanner.innerHTML = `
-            <span style="font-size: 1.6rem; animation: iconShake 0.5s infinite;">🚨</span>
+            <span style="font-size: 1.6rem; animation: iconShake 0.5s infinite;">[!]</span>
             <div style="display: flex; flex-direction: column;">
                 <span style="letter-spacing: 1px; text-transform: uppercase; font-size: 0.75rem; color: var(--danger); font-weight: 800;">ALERTA DE SEGURIDAD CRÍTICA</span>
                 <span id="critical-alert-text">${mensaje}</span>
@@ -1046,7 +1046,7 @@ function mostrarModalQR(idProd, nombreProd) {
                     </div>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="primary-btn" id="modal-btn-print" style="padding:10px 20px; flex:1;">🖨️ Imprimir</button>
+                    <button class="primary-btn" id="modal-btn-print" style="padding:10px 20px; flex:1;">[Print] Imprimir</button>
                     <button class="secondary-btn" id="modal-btn-close" style="margin-top:0; padding:10px 20px; flex:1;">Cerrar</button>
                 </div>
             </div>
@@ -1156,7 +1156,7 @@ async function eliminarProducto(id) {
         try {
             await remove(ref(db, `inventario/${id}`));
             await registrarAuditoria('Eliminación Producto', `Producto eliminado: ID ${id}`);
-            crearToast(`🗑️ Producto ${id} eliminado con éxito`, "success");
+            crearToast(`[Delete] Producto ${id} eliminado con éxito`, "success");
         } catch (e) {
             console.error(e);
             alert("Error al eliminar producto.");
@@ -1206,7 +1206,7 @@ if (btnAgregarInventario) {
                 });
 
                 await registrarAuditoria('Edición Producto', `Producto editado: ${nombre} (ID: ${editingProductId})`);
-                crearToast(`✏️ Producto ${editingProductId} actualizado con éxito`, "success");
+                crearToast(`[Edit] Producto ${editingProductId} actualizado con éxito`, "success");
 
                 // Reset state
                 editingProductId = null;
@@ -1230,7 +1230,7 @@ if (btnAgregarInventario) {
                 });
 
                 await registrarAuditoria('Registro Producto', `Producto agregado: ${nombre} (ID: ${finalId})`);
-                crearToast(`✅ Producto ${nombre} agregado con éxito`, "success");
+                crearToast(`[OK] Producto ${nombre} agregado con éxito`, "success");
             }
 
             // Limpiar formulario
@@ -1271,11 +1271,11 @@ async function enviarCorreoConFallback(payload) {
             console.log('[Email] Correo enviado exitosamente a:', payload.To);
         } else {
             console.warn('[Email] El servidor respondió con error:', result.error);
-            crearToast('⚠️ No se pudo enviar el correo. Usa el código de la consola (F12).', 'danger');
+            crearToast('[!] No se pudo enviar el correo. Usa el código de la consola (F12).', 'danger');
         }
     } catch (err) {
         console.error('[Email] Error al contactar el backend de correo:', err);
-        crearToast('⚠️ Servicio de correo no disponible. Usa el código de la consola (F12).', 'danger');
+        crearToast('[!] Servicio de correo no disponible. Usa el código de la consola (F12).', 'danger');
     }
 }
 
@@ -1313,7 +1313,7 @@ btnIngresar.addEventListener('click', async () => {
                 const u = users[key];
                 if (u.usuario === user && u.passwordWeb === pass) {
                     authenticatedUser = u;
-                    console.log('[Login] ✅ Credenciales válidas para nodo:', key);
+                    console.log('[Login] [OK] Credenciales válidas para nodo:', key);
                 }
             });
         }
@@ -1338,7 +1338,7 @@ btnIngresar.addEventListener('click', async () => {
     dashboardContainer.style.display = "flex";
     btnIngresar.disabled = false;
     btnIngresar.textContent = "Ingresar";
-    crearToast("🔓 Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
+    crearToast("[Unlock] Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
     actualizarPerfil();
     await registrarAuditoria('Inicio Sesión', `Usuario ${authenticatedUser.usuario} inició sesión.`);
 });
@@ -1402,7 +1402,7 @@ if (btnCerrarSesion) {
             loginOverlay.style.display = "flex";
             loginUser.value = '';
             loginPass.value = '';
-            crearToast('👋 Sesión cerrada correctamente.', 'success');
+            crearToast('[Bye] Sesión cerrada correctamente.', 'success');
         }
     });
 }
@@ -1426,7 +1426,7 @@ onValue(ref(db, 'monitoreo_tiempo_real/ultimo_intento_invalido'), (snapshot) => 
         modalUserNombre.value = "";
         modalUserRol.value = "";
         modalTarjeta.style.display = 'flex';
-        crearToast(`🚨 Intento de acceso denegado. UID: ${data.uid}`, "danger");
+        crearToast(`[!] Intento de acceso denegado. UID: ${data.uid}`, "danger");
     }
 });
 
@@ -1480,7 +1480,7 @@ btnRegistrarModal.addEventListener('click', async () => {
 
         if (modalCorreoInput) modalCorreoInput.value = '';
         modalTarjeta.style.display = 'none';
-        crearToast(`✅ ¡Tarjeta autorizada con éxito para ${nombre}!`, "success");
+        crearToast(`[OK] ¡Tarjeta autorizada con éxito para ${nombre}!`, "success");
     } catch (e) {
         console.error(e);
         alert('Error al registrar o enviar correo de bienvenida.');
