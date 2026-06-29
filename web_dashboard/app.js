@@ -374,20 +374,19 @@ onValue(ref(db, 'usuarios'), (snapshot) => {
         Object.keys(data).forEach(key => {
             const user = data[key];
             const tr = document.createElement('tr');
-            const credsWeb = user.usuarioWeb
-                ? `<span style="font-size:0.8rem; font-family:monospace; color:var(--primary);">User: ${user.usuarioWeb}<br>Pass: ${user.passwordWeb}</span>`
-                : '<span style="color:var(--text-muted);">---</span>';
+            const nombreDocente = user.nombre || '';
             tr.innerHTML = `
                 <td><span style="font-family:monospace; color:var(--accent); font-weight:700;">${key}</span></td>
-                <td><strong>${user.nombre}</strong></td>
+                <td><strong>${nombreDocente}</strong></td>
                 <td>${user.rol}</td>
                 <td><span style="font-size:0.8rem; color:var(--text-muted);">${user.correo || '---'}</span></td>
-                <td>${credsWeb}</td>
+                <td><button class="qr-btn" data-nombre="${nombreDocente}" style="padding:5px 10px; background:rgba(109,184,122,0.15); border:1px solid rgba(109,184,122,0.3); color:var(--success); border-radius:8px; font-weight:600; cursor:pointer; font-size:0.75rem;">Ver</button></td>
                 <td style="display:flex; gap:6px; flex-wrap:wrap;">
                     <button class="edit-btn" data-uid="${key}">Editar</button>
                     <button class="delete-btn" data-uid="${key}">Eliminar</button>
                 </td>
             `;
+            tr.querySelector('.qr-btn').addEventListener('click', () => mostrarActividadDocente(nombreDocente));
             tr.querySelector('.delete-btn').addEventListener('click', (e) => {
                 const uid = e.currentTarget.dataset.uid;
                 if (confirm(`¿Estás seguro de revocar el acceso a ${user.nombre}?`)) {
@@ -685,7 +684,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
 
 
 // --- ACCIÓN: SEED DATA (INYECTAR DATOS SEMILLA) ---
-btnSeedData.addEventListener('click', async () => {
+if (btnSeedData) btnSeedData.addEventListener('click', async () => {
     if (!confirm('¿Deseas inyectar datos de prueba en tu base de datos Firebase? Esto llenará los sensores, inventarios y docentes modelo para demostración.')) {
         return;
     }
@@ -761,6 +760,117 @@ btnSeedData.addEventListener('click', async () => {
         alert('Error al inyectar datos semilla: ' + e.message);
     }
 });
+
+// --- FUNCIÓN: MOSTRAR ACTIVIDAD DE UN DOCENTE ---
+function mostrarActividadDocente(nombreDocente) {
+    let modal = document.getElementById('actividad-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'actividad-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:12000;display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:500px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);max-height:80vh;overflow-y:auto;">
+            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">📋 Actividad de ${nombreDocente}</h2>
+            <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;">Últimas acciones registradas en el sistema</p>
+            <div id="actividad-list" style="display:flex;flex-direction:column;gap:10px;">
+                <p style="color:var(--text-muted);text-align:center;padding:20px;">Cargando...</p>
+            </div>
+            <button class="secondary-btn" onclick="document.getElementById('actividad-modal').style.display='none'" style="margin-top:15px;">Cerrar</button>
+        </div>
+    `;
+    modal.style.display = 'flex';
+
+    // Load audit data for this user
+    get(ref(db, 'auditoria')).then(snapshot => {
+        const list = document.getElementById('actividad-list');
+        if (!list) return;
+        list.innerHTML = '';
+        const data = snapshot.val();
+        if (data) {
+            const entries = Object.values(data)
+                .filter(e => e.usuario === nombreDocente || (e.detalles && e.detalles.includes(nombreDocente)))
+                .reverse()
+                .slice(0, 20);
+            if (entries.length === 0) {
+                list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sin actividad registrada.</p>';
+                return;
+            }
+            entries.forEach(entry => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:10px 14px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid var(--glass-border);';
+                div.innerHTML = `
+                    <p style="font-size:0.8rem;font-weight:600;color:var(--text-main);">${entry.accion || '—'}</p>
+                    <p style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${entry.detalles || ''}</p>
+                    <p style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;font-family:monospace;">${entry.timestamp || ''}</p>
+                `;
+                list.appendChild(div);
+            });
+        } else {
+            list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sin actividad registrada.</p>';
+        }
+    });
+}
+
+// --- FUNCIÓN: CAMBIAR CONTRASEÑA ---
+// (Se invoca desde el panel de perfil)
+function agregarBotonCambiarContrasena() {
+    const btnCerrar = document.getElementById('btnCerrarSesion');
+    if (!btnCerrar) return;
+
+    const btnCambiar = document.createElement('button');
+    btnCambiar.className = 'primary-btn';
+    btnCambiar.id = 'btnCambiarPass';
+    btnCambiar.style.cssText = 'margin-top:10px;background:linear-gradient(135deg,#2980b9,#3498db);box-shadow:0 5px 15px rgba(52,152,219,0.3);';
+    btnCambiar.innerHTML = '🔑 Cambiar Contraseña';
+    btnCambiar.addEventListener('click', () => {
+        let modal = document.getElementById('change-pass-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'change-pass-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:12000;display:flex;align-items:center;justify-content:center;';
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `
+            <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:380px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);">
+                <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:20px;">🔑 Cambiar Contraseña</h2>
+                <div class="input-group"><label>Contraseña Actual</label><input type="password" id="oldPass" placeholder="••••••••"></div>
+                <div class="input-group"><label>Nueva Contraseña</label><input type="password" id="newPass" placeholder="••••••••"></div>
+                <div class="input-group"><label>Confirmar Nueva Contraseña</label><input type="password" id="confirmPass" placeholder="••••••••"></div>
+                <button class="primary-btn" id="btnConfirmarPass">Actualizar Contraseña</button>
+                <button class="secondary-btn" onclick="document.getElementById('change-pass-modal').style.display='none'" style="margin-top:8px;">Cancelar</button>
+            </div>
+        `;
+        modal.style.display = 'flex';
+
+        document.getElementById('btnConfirmarPass').addEventListener('click', async () => {
+            const oldP = document.getElementById('oldPass').value.trim();
+            const newP = document.getElementById('newPass').value.trim();
+            const confP = document.getElementById('confirmPass').value.trim();
+
+            if (!oldP || !newP || !confP) { alert('Completa todos los campos.'); return; }
+            if (oldP !== usuarioActivo.passwordWeb) { alert('La contraseña actual es incorrecta.'); return; }
+            if (newP !== confP) { alert('Las nuevas contraseñas no coinciden.'); return; }
+            if (newP.length < 4) { alert('La nueva contraseña debe tener al menos 4 caracteres.'); return; }
+
+            try {
+                await update(ref(db, `usuarios_sistema/${usuarioActivo.usuario}`), { passwordWeb: newP });
+                usuarioActivo.passwordWeb = newP;
+                modal.style.display = 'none';
+                crearToast('✅ Contraseña actualizada correctamente.', 'success');
+                await registrarAuditoria('Cambio de Contraseña', 'El usuario cambió su contraseña.');
+            } catch (e) {
+                console.error(e);
+                alert('Error al actualizar la contraseña.');
+            }
+        });
+    });
+    btnCerrar.parentNode.insertBefore(btnCambiar, btnCerrar);
+}
+
+// Inicializar botón de cambiar contraseña al cargar
+agregarBotonCambiarContrasena();
 
 // --- SISTEMA DE ALERTA DE SEGURIDAD CRÍTICA Y AUDIO ---
 
@@ -948,7 +1058,7 @@ function mostrarModalQR(idProd, nombreProd) {
     document.getElementById('modal-qr-label').innerText = idProd;
 
     // Generar URL del servidor dinámica apuntando al backend en el puerto 5000
-    const qrUrl = `https://smartstock.eu1.netbird.services/nodered/form-retiro?id_producto=${idProd}`;
+    const qrUrl = `${window.location.origin}/retiro.html?id=${idProd}`;
 
     const qrContainer = document.getElementById('modal-qr-preview');
     qrContainer.innerHTML = '';
@@ -1229,8 +1339,73 @@ btnIngresar.addEventListener('click', async () => {
     btnIngresar.disabled = false;
     btnIngresar.textContent = "Ingresar";
     crearToast("🔓 Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
+    actualizarPerfil();
     await registrarAuditoria('Inicio Sesión', `Usuario ${authenticatedUser.usuario} inició sesión.`);
 });
+
+// --- LÓGICA: PANEL DE PERFIL Y CERRAR SESIÓN ---
+const profileNombre = document.getElementById('profileNombre');
+const profileRol = document.getElementById('profileRol');
+const profileUsuario = document.getElementById('profileUsuario');
+const profileCorreo = document.getElementById('profileCorreo');
+const profileIdOperador = document.getElementById('profileIdOperador');
+const profileAuditoria = document.getElementById('profileAuditoria');
+const btnCerrarSesion = document.getElementById('btnCerrarSesion');
+
+function actualizarPerfil() {
+    if (!usuarioActivo) return;
+    profileNombre.textContent = usuarioActivo.usuario || '—';
+    profileRol.textContent = usuarioActivo.rol || '—';
+    profileUsuario.textContent = usuarioActivo.usuario || '—';
+    profileCorreo.textContent = usuarioActivo.correo || '—';
+    profileIdOperador.textContent = usuarioActivo.id_operador || '—';
+
+    // Cargar actividad reciente del usuario
+    const auditRef = ref(db, 'auditoria');
+    onValue(auditRef, (snapshot) => {
+        profileAuditoria.innerHTML = '';
+        const data = snapshot.val();
+        if (data) {
+            const entries = Object.values(data)
+                .filter(e => e.usuario === usuarioActivo.usuario)
+                .reverse()
+                .slice(0, 15);
+            if (entries.length === 0) {
+                profileAuditoria.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>';
+                return;
+            }
+            entries.forEach(entry => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 10px 14px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--glass-border);';
+                div.innerHTML = `
+                    <p style="font-size: 0.8rem; font-weight: 600; color: var(--text-main);">${entry.accion || '—'}</p>
+                    <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">${entry.detalles || ''}</p>
+                    <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; font-family: monospace;">${entry.timestamp || ''}</p>
+                `;
+                profileAuditoria.appendChild(div);
+            });
+        } else {
+            profileAuditoria.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>';
+        }
+    });
+}
+
+if (btnCerrarSesion) {
+    btnCerrarSesion.addEventListener('click', () => {
+        if (confirm('¿Estás seguro de cerrar sesión?')) {
+            usuarioActivo = null;
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            dashboardContainer.style.display = "none";
+            loginOverlay.style.display = "flex";
+            loginUser.value = '';
+            loginPass.value = '';
+            crearToast('👋 Sesión cerrada correctamente.', 'success');
+        }
+    });
+}
 
 // --- COMPONENTES DEL MODAL INTERACTIVO DE TARJETAS ---
 const modalTarjeta = document.getElementById('modalTarjetaDesconocida');
@@ -1352,7 +1527,7 @@ function actualizarEtiquetasQR() {
             `;
             labelsPrintGrid.appendChild(div);
 
-            const qrUrl = `https://smartstock.eu1.netbird.services/nodered/form-retiro?id_producto=${key}`;
+            const qrUrl = `${window.location.origin}/retiro.html?id=${key}`;
             if (typeof QRCode !== 'undefined') {
                 new QRCode(document.getElementById(`qr-preview-${key}`), {
                     text: qrUrl,
