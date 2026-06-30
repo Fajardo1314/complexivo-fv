@@ -1340,6 +1340,7 @@ btnIngresar.addEventListener('click', async () => {
     btnIngresar.textContent = "Ingresar";
     crearToast("[Unlock] Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
     actualizarPerfil();
+    aplicarVisibilidadAdmin();
     await registrarAuditoria('Inicio Sesión', `Usuario ${authenticatedUser.usuario} inició sesión.`);
 });
 
@@ -1394,15 +1395,14 @@ if (btnCerrarSesion) {
     btnCerrarSesion.addEventListener('click', () => {
         if (confirm('¿Estás seguro de cerrar sesión?')) {
             usuarioActivo = null;
-            if (countdownInterval) {
-                clearInterval(countdownInterval);
-                countdownInterval = null;
-            }
             dashboardContainer.style.display = "none";
             loginOverlay.style.display = "flex";
             loginUser.value = '';
             loginPass.value = '';
-            crearToast('[Bye] Sesión cerrada correctamente.', 'success');
+            // Ocultar panel de servidor al cerrar sesion
+            const navServidor = document.querySelector('.nav-btn[data-target="panel-servidor"]');
+            if (navServidor) navServidor.style.display = 'none';
+            crearToast('[Bye] Sesion cerrada correctamente.', 'success');
         }
     });
 }
@@ -1558,7 +1558,202 @@ if (btnExportarPdfLabels) {
     });
 }
 
-// Función dinámica para alertas Toast en pantalla
+// --- FIREBASE: RETIROS DE PRODUCTOS ---
+const listaRetiros = document.getElementById('listaRetiros');
+if (listaRetiros) {
+    onValue(ref(db, 'retiros'), (snapshot) => {
+        listaRetiros.innerHTML = '';
+        const data = snapshot.val();
+        if (data) {
+            const keys = Object.keys(data).reverse();
+            keys.forEach(key => {
+                const r = data[key];
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${r.nombre_producto || '—'}</strong></td>
+                    <td><span style="font-family:monospace; color:var(--primary);">${r.producto_id || '—'}</span></td>
+                    <td>${r.cantidad_retirada || '—'}</td>
+                    <td>${r.stock_anterior !== undefined ? r.stock_anterior : '—'}</td>
+                    <td>${r.stock_nuevo !== undefined ? r.stock_nuevo : '—'}</td>
+                    <td>${r.usuario || '—'}</td>
+                    <td><span style="font-size:0.8rem; color:var(--text-muted);">${r.fecha || '—'}</span></td>
+                `;
+                listaRetiros.appendChild(tr);
+            });
+        } else {
+            listaRetiros.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No hay retiros registrados.</td></tr>';
+        }
+    });
+}
+
+// --- MODULO: GAUGE DE AFORO EN TIEMPO REAL ---
+const aforoArc = document.getElementById('aforoArc');
+const aforoValue = document.getElementById('aforoValue');
+const aforoLimiteEl = document.getElementById('aforoLimite');
+const aforoPorcentaje = document.getElementById('aforoPorcentaje');
+const aforoEstado = document.getElementById('aforoEstado');
+const ARC_LENGTH = 251.33;
+let limiteAforo = 25;
+
+// Read limite_aforo from Firebase
+onValue(ref(db, 'configuracion/limite_aforo'), (snapshot) => {
+    const val = snapshot.val();
+    if (val && val > 0) {
+        limiteAforo = val;
+        if (aforoLimiteEl) aforoLimiteEl.textContent = val;
+        const inputEl = document.getElementById('inputLimiteAforo');
+        if (inputEl && !inputEl.value) inputEl.value = val;
+    }
+});
+
+function actualizarGaugeAforo(personas) {
+    if (!aforoArc) return;
+    const pct = Math.min(personas / limiteAforo, 1);
+    const dashLen = pct * ARC_LENGTH;
+    aforoArc.setAttribute('stroke-dasharray', `${dashLen} ${ARC_LENGTH}`);
+    let color = '#6db87a', estado = 'NORMAL', pctColor = 'var(--success)';
+    let estadoBg = 'rgba(109,184,122,0.15)', estadoBorder = 'rgba(109,184,122,0.3)';
+    if (pct > 0.8) {
+        color = '#e05252'; estado = 'CRITICO'; pctColor = 'var(--danger)';
+        estadoBg = 'rgba(224,82,82,0.15)'; estadoBorder = 'rgba(224,82,82,0.3)';
+    } else if (pct > 0.5) {
+        color = '#d4a030'; estado = 'ALERTA'; pctColor = 'var(--warning)';
+        estadoBg = 'rgba(212,160,48,0.15)'; estadoBorder = 'rgba(212,160,48,0.3)';
+    }
+    aforoArc.setAttribute('stroke', color);
+    aforoValue.textContent = personas;
+    aforoPorcentaje.textContent = Math.round(pct * 100) + '%';
+    aforoPorcentaje.style.color = pctColor;
+    aforoEstado.textContent = estado;
+    aforoEstado.style.background = estadoBg;
+    aforoEstado.style.color = pctColor;
+    aforoEstado.style.borderColor = estadoBorder;
+}
+
+// Hook gauge into infrarrojo sensor
+onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
+    const val = snapshot.val();
+    const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
+    actualizarGaugeAforo(personas);
+});
+
+// --- MODULO: PANEL SERVIDOR (Solo Admin/SuperAdmin) ---
+const panelServidor = document.getElementById('panel-servidor');
+const inputLimiteAforo = document.getElementById('inputLimiteAforo');
+const btnGuardarLimiteAforo = document.getElementById('btnGuardarLimiteAforo');
+const aforoConfigStatus = document.getElementById('aforoConfigStatus');
+const btnRestartServices = document.getElementById('btnRestartServices');
+const btnShutdownPi = document.getElementById('btnShutdownPi');
+const serverCmdStatus = document.getElementById('serverCmdStatus');
+
+function esAdmin() {
+    if (!usuarioActivo) return false;
+    const rol = (usuarioActivo.rol || '').toLowerCase();
+    return rol === 'superadmin' || rol === 'admin' || rol === 'super_admin';
+}
+
+function aplicarVisibilidadAdmin() {
+    // Show/hide "Servidor" button for admin only
+    const navBtn = document.querySelector('.nav-btn[data-target="panel-servidor"]');
+    if (esAdmin()) {
+        if (navBtn) navBtn.style.display = 'flex';
+    } else {
+        if (navBtn) navBtn.style.display = 'none';
+    }
+
+    // Role-based nav visibility using data-roles attribute
+    const userRol = (usuarioActivo && usuarioActivo.rol) ? usuarioActivo.rol : '';
+    document.querySelectorAll('.nav-btn[data-roles]').forEach(btn => {
+        const allowedRoles = btn.dataset.roles.split(',');
+        if (allowedRoles.includes(userRol)) {
+            btn.style.display = 'flex';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+
+    // Role-based edit restrictions for Docente (formerly Administrador)
+    if (userRol === 'Docente') {
+        document.querySelectorAll('#listaUsuarios .edit-btn, #listaUsuarios .delete-btn').forEach(b => b.style.display = 'none');
+        const docenteForm = document.querySelector('#panel-usuarios .form-container');
+        if (docenteForm) docenteForm.style.display = 'none';
+    }
+
+    if (userRol === 'Estudiante') {
+        document.querySelectorAll('#listaInventario .edit-btn, #listaInventario .delete-btn').forEach(b => b.style.display = 'none');
+        document.querySelectorAll('#listaInventario .qr-btn').forEach(b => b.style.display = 'none');
+        const invForm = document.querySelector('#panel-inventario .form-container');
+        if (invForm) invForm.style.display = 'none';
+    }
+}
+
+// Create admin nav button dynamically
+(function crearBotonServidor() {
+    const nav = document.querySelector('.nav-menu');
+    if (!nav) return;
+    const btn = document.createElement('button');
+    btn.className = 'nav-btn';
+    btn.dataset.target = 'panel-servidor';
+    btn.style.display = 'none';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span>Servidor</span>';
+    btn.addEventListener('click', () => {
+        nav.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-servidor').classList.add('active');
+    });
+    const perfilBtn = nav.querySelector('.nav-btn[data-target="panel-perfil"]');
+    if (perfilBtn) nav.insertBefore(btn, perfilBtn);
+    else nav.appendChild(btn);
+})();
+
+// Apply admin visibility on login
+onValue(ref(db, 'usuarios_sistema'), () => { if (usuarioActivo) aplicarVisibilidadAdmin(); });
+
+// Save aforo limit
+if (btnGuardarLimiteAforo) {
+    btnGuardarLimiteAforo.addEventListener('click', async () => {
+        const val = parseInt(inputLimiteAforo.value);
+        if (!val || val < 1) { alert('Ingresa un valor valido mayor a 0.'); return; }
+        try {
+            await set(ref(db, 'configuracion/limite_aforo'), val);
+            aforoConfigStatus.textContent = 'Limite actualizado a ' + val + ' personas.';
+            aforoConfigStatus.style.color = 'var(--success)';
+            await registrarAuditoria('Cambio Limite Aforo', 'Limite cambiado a ' + val);
+            crearToast('[OK] Limite de aforo actualizado a ' + val, 'success');
+        } catch (e) { console.error(e); aforoConfigStatus.textContent = 'Error al guardar.'; }
+    });
+}
+
+// Restart services
+if (btnRestartServices) {
+    btnRestartServices.addEventListener('click', async () => {
+        if (!confirm('Reiniciara Mosquitto y Node-RED en la Raspberry Pi. Continuar?')) return;
+        try {
+            await set(ref(db, 'sistema/comandos_servidor'), { accion: 'restart_services', timestamp: Date.now(), usuario: usuarioActivo.usuario });
+            serverCmdStatus.textContent = 'Comando enviado. Reiniciando servicios...';
+            serverCmdStatus.style.color = 'var(--warning)';
+            await registrarAuditoria('Reinicio Servicios', 'Comando de reinicio enviado');
+            crearToast('[OK] Comando de reinicio enviado.', 'success');
+        } catch (e) { console.error(e); }
+    });
+}
+
+// Shutdown
+if (btnShutdownPi) {
+    btnShutdownPi.addEventListener('click', async () => {
+        if (!confirm('ATENCION: Apagara la Raspberry Pi. Continuar?')) return;
+        try {
+            await set(ref(db, 'sistema/comandos_servidor'), { accion: 'shutdown', timestamp: Date.now(), usuario: usuarioActivo.usuario });
+            serverCmdStatus.textContent = 'Comando de apagado enviado.';
+            serverCmdStatus.style.color = 'var(--danger)';
+            await registrarAuditoria('Apagar RPi', 'Comando de apagado enviado');
+            crearToast('[!] Comando de apagado enviado.', 'danger');
+        } catch (e) { console.error(e); }
+    });
+}
+
+// Funcion dinamica para alertas Toast en pantalla
 function crearToast(mensaje, tipo = "danger") {
     const toast = document.createElement('div');
     toast.className = 'toast';
