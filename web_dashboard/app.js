@@ -121,6 +121,46 @@ navBtns.forEach(btn => {
     });
 });
 
+// --- HAMBURGER MENU (MOBILE) ---
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const sidebar = document.getElementById('sidebar');
+if (hamburgerBtn && sidebar) {
+    hamburgerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('active');
+    });
+
+    // Close sidebar when clicking a nav button on mobile
+    sidebar.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('active');
+            }
+        });
+    });
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
+            if (!sidebar.contains(e.target) && e.target !== hamburgerBtn && !hamburgerBtn.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        }
+    });
+
+    // Show hamburger on mobile
+    function checkMobile() {
+        if (window.innerWidth <= 768) {
+            hamburgerBtn.style.display = 'flex';
+        } else {
+            hamburgerBtn.style.display = 'none';
+            sidebar.classList.remove('active');
+        }
+    }
+    window.addEventListener('resize', checkMobile);
+    checkMobile();
+}
+
 // --- SISTEMA TIME & DATE ---
 setInterval(() => {
     const ahora = new Date();
@@ -1672,18 +1712,24 @@ function aplicarVisibilidadAdmin() {
         }
     });
 
-    // Role-based edit restrictions for Docente (formerly Administrador)
+    // Role-based edit restrictions for Docente
     if (userRol === 'Docente') {
+        // Docente: can view docentes table but cannot edit/delete RFID users
         document.querySelectorAll('#listaUsuarios .edit-btn, #listaUsuarios .delete-btn').forEach(b => b.style.display = 'none');
         const docenteForm = document.querySelector('#panel-usuarios .form-container');
         if (docenteForm) docenteForm.style.display = 'none';
+        // Docente CAN manage inventory and Usuarios de Plataforma (full access)
     }
 
     if (userRol === 'Estudiante') {
+        // Estudiante: read-only inventory, no QR, no forms
         document.querySelectorAll('#listaInventario .edit-btn, #listaInventario .delete-btn').forEach(b => b.style.display = 'none');
         document.querySelectorAll('#listaInventario .qr-btn').forEach(b => b.style.display = 'none');
         const invForm = document.querySelector('#panel-inventario .form-container');
         if (invForm) invForm.style.display = 'none';
+        // Hide Usuarios de Plataforma for Estudiante
+        const webUsersNav = document.querySelector('.nav-btn[data-target="panel-usuarios-web"]');
+        if (webUsersNav) webUsersNav.style.display = 'none';
     }
 }
 

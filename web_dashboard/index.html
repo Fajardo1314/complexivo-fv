@@ -45,8 +45,16 @@
     </div>
 
     <div class="dashboard-container" style="display: none;">
+        <!-- Hamburger Menu Button (mobile only) -->
+        <button id="hamburgerBtn"
+            style="display:none; position:fixed; top:12px; left:12px; z-index:9998; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-main); padding:10px 14px; border-radius:10px; font-size:1.2rem; cursor:pointer; backdrop-filter:blur(10px);">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+                <path fill="currentColor" d="M3,6H21V8H3V6M3,11H21V13H3V11M3,16H21V18H3V16Z" />
+            </svg>
+        </button>
+
         <!-- Sidebar -->
-        <aside class="sidebar glass-panel">
+        <aside class="sidebar glass-panel" id="sidebar">
             <div class="logo-area">
                 <div class="logo-icon">
                     <svg viewBox="0 0 24 24" width="32" height="32">
@@ -95,19 +103,19 @@
                     </svg>
                     <span>Gestión de Docentes</span>
                 </button>
-                <button class="nav-btn" data-target="panel-usuarios-web" data-roles="SuperAdmin">
+                <button class="nav-btn" data-target="panel-usuarios-web" data-roles="SuperAdmin,Docente">
                     <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
                         <path fill="currentColor"
                             d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
                     </svg>
                     <span>Usuarios Plataforma</span>
                 </button>
-                <button class="nav-btn" data-target="panel-perfil" data-roles="SuperAdmin,Docente,Estudiante"></button>
-                <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                    <path fill="currentColor"
-                        d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4M12,6C9.79,6 8,7.79 8,10C8,12.21 9.79,14 12,14C14.21,14 16,12.21 16,10C16,7.79 14.21,6 12,6M6,18.23C7.86,19.94 9.81,21 12,21C14.19,21 16.14,19.94 18,18.23C16.1,16.47 14,15.5 12,15.5C10,15.5 7.9,16.47 6,18.23Z" />
-                </svg>
-                <span>Mi Perfil</span>
+                <button class="nav-btn" data-target="panel-perfil" data-roles="SuperAdmin,Docente,Estudiante">
+                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
+                        <path fill="currentColor"
+                            d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4M12,6C9.79,6 8,7.79 8,10C8,12.21 9.79,14 12,14C14.21,14 16,12.21 16,10C16,7.79 14.21,6 12,6M6,18.23C7.86,19.94 9.81,21 12,21C14.19,21 16.14,19.94 18,18.23C16.1,16.47 14,15.5 12,15.5C10,15.5 7.9,16.47 6,18.23Z" />
+                    </svg>
+                    <span>Mi Perfil</span>
                 </button>
             </nav>
             <div class="sidebar-footer">

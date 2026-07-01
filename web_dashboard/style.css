@@ -782,6 +782,93 @@ body {
     }
 }
 
+/* Mobile Responsive (< 768px) */
+@media (max-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: -100%;
+        top: 0;
+        width: 280px;
+        height: 100vh;
+        z-index: 9997;
+        transition: left 0.3s ease;
+        overflow-y: auto;
+    }
+
+    .sidebar.active {
+        left: 0;
+    }
+
+    #hamburgerBtn {
+        display: flex !important;
+    }
+
+    .main-content {
+        width: 100%;
+        padding: 15px;
+        padding-top: 60px;
+    }
+
+    .dashboard-container {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .panel-header h1 {
+        font-size: 1.4rem;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .data-table {
+        min-width: 600px;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-wrapper {
+        height: 200px;
+    }
+
+    #aforoGauge {
+        width: 150px;
+        height: 90px;
+    }
+
+    .login-box {
+        width: 95%;
+        padding: 25px 20px;
+    }
+}
+
+/* Sidebar overlay for mobile */
+@media (max-width: 768px) {
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9996;
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+}
+
 .modal-overlay {
     position: fixed;
     top: 0;
