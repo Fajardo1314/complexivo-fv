@@ -2,12 +2,20 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getDatabase, ref, onValue, update, remove, set, get, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // --- CONFIGURACIÓN FIREBASE ---
-const firebaseConfig = {
-    databaseURL: "https://aula-4587b-default-rtdb.firebaseio.com/"
-};
+// === OUR database (complexivo-fv) ===
+const OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/";
+const ourApp = initializeApp({ databaseURL: OUR_DB_URL }, 'ours');
+const db = getDatabase(ourApp);
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+// === STAGING database (new-conexion) - READ ONLY for hardware ===
+const COMPANION_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/";
+let companionDb = null;
+try {
+    const companionApp = initializeApp({ databaseURL: COMPANION_DB_URL }, 'companion');
+    companionDb = getDatabase(companionApp);
+} catch (e) {
+    console.warn('[DB] Companion DB init:', e.message);
+}
 
 
 // --- SHA-256 HASH HELPER ---
@@ -285,14 +293,14 @@ function verificarIntrusion() {
 }
 
 // Sensor PIR
-onValue(ref(db, 'movimiento_pir'), (snapshot) => {
+onValue(ref(companionDb || db, 'movimiento_pir'), (snapshot) => {
     const val = snapshot.val();
     currentPirState = (val === true || val === "true" || val === "Movimiento Detectado" || val === 1 || val === "1");
     verificarIntrusion();
 });
 
 // Sensor Puerta (Cerrojo Eléctrico / Estado de la Puerta)
-onValue(ref(db, 'puerta_fisica/estado'), (snapshot) => {
+onValue(ref(companionDb || db, 'puerta_fisica/estado'), (snapshot) => {
     const val = snapshot.val();
     const isOpen = (val === true || val === "true" || val === "ABIERTA" || val === "abierta" || val === 1 || val === "1");
     currentPuertaState = isOpen ? 'ABIERTA' : 'CERRADA';
@@ -313,7 +321,7 @@ onValue(ref(db, 'puerta_fisica/estado'), (snapshot) => {
 });
 
 // Sensor Infrarrojo (Cantidad de Personas / Aforo)
-onValue(ref(db, 'aforo'), (snapshot) => {
+onValue(ref(companionDb || db, 'aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     countPersonas.innerText = personas;
@@ -323,7 +331,7 @@ onValue(ref(db, 'aforo'), (snapshot) => {
 });
 
 // --- FIREBASE: CONTROL FOCO INTELIGENTE MERCURY ---
-onValue(ref(db, 'movimiento_pir'), (snapshot) => {
+onValue(ref(db, 'estado_foco'), (snapshot) => {
     const raw = snapshot.val();
     const val = (raw || "").toString().trim().toUpperCase();
     const isEncendido = (val === "ENCENDIDO" || val === "ON" || val === "TRUE" || val === "1");
@@ -391,7 +399,7 @@ onValue(ref(db, 'inventario'), (snapshot) => {
 });
 
 // --- FIREBASE: ACCESOS HISTÓRICOS ---
-onValue(ref(db, 'accesos'), (snapshot) => {
+onValue(ref(companionDb || db, 'accesos'), (snapshot) => {
     listaAccesos.innerHTML = '';
     const data = snapshot.val();
     if (data) {
@@ -427,7 +435,7 @@ onValue(ref(db, 'accesos'), (snapshot) => {
 });
 
 // --- FIREBASE: GESTIÓN DE USUARIOS RFID ---
-onValue(ref(db, 'usuarios'), (snapshot) => {
+onValue(ref(companionDb || db, 'usuarios'), (snapshot) => {
     listaUsuarios.innerHTML = '';
     const data = snapshot.val();
     if (data) {
@@ -1700,8 +1708,8 @@ function actualizarGaugeAforo(personas) {
     aforoEstado.style.borderColor = estadoBorder;
 }
 
-// Hook gauge into infrarrojo sensor
-onValue(ref(db, 'aforo'), (snapshot) => {
+// Hook gauge into aforo sensor
+onValue(ref(companionDb || db, 'aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     actualizarGaugeAforo(personas);

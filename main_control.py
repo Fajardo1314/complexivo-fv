@@ -59,16 +59,48 @@ except Exception as e:
             return None, None
     reader = MockRFIDFallback()
 
-# --- CONFIGURACIÓN FIREBASE ---
+# --- CONFIGURACIÓN FIREBASE (DUAL DATABASE) ---
+# DB principal (complexivo-fv): hardware (aforo, PIR, foco, inventario)
+# DB staging (new-conexion): puerta_fisica, accesos, codigos_unico (espejo del compañero)
+
+OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/"
+STAGING_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/"
+
 try:
     cred = credentials.Certificate('google-services.json')
+    # App principal (nombres por defecto)
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred, {
-            'databaseURL': 'https://complexivo-fv-default-rtdb.firebaseio.com/'
+            'databaseURL': OUR_DB_URL
         })
-    print("[Firebase] Conectado exitosamente.")
+    print(f"[Firebase] DB principal conectada: {OUR_DB_URL}")
 except Exception as e:
-    print(f"[ERROR Firebase] Verifica google-services.json: {e}")
+    print(f"[ERROR Firebase principal] Verifica google-services.json: {e}")
+
+# App secundaria para staging (necesita nombre único)
+staging_app = None
+try:
+    staging_app = firebase_admin.initialize_app(
+        cred,
+        {'databaseURL': STAGING_DB_URL},
+        name='staging'
+    )
+    print(f"[Firebase] DB staging conectada: {STAGING_DB_URL}")
+except Exception as e:
+    print(f"[Firebase] DB staging no disponible (se omite): {e}")
+    staging_app = None
+
+# --- HELPERS DUAL-DATABASE ---
+def db_primary():
+    """Retorna referencia a la base de datos principal (complexivo-fv)."""
+    return db
+
+def db_staging():
+    """Retorna referencia a la base de datos staging (new-conexion). Si no está disponible, usa la principal."""
+    if staging_app:
+        from firebase_admin import db as _db
+        return _db.reference('', app=staging_app)
+    return db
 
 # --- VARIABLES GLOBALES ---
 estado_actual = {
@@ -118,6 +150,33 @@ def actualizar_monitoreo(datos):
     except Exception as e:
         print(f"[Error Firebase] {e}")
 
+def actualizar_staging(path, datos):
+    """Escribe datos en la base de datos staging (new-conexion)."""
+    try:
+        if staging_app:
+            from firebase_admin import db as _db
+            ref = _db.reference(path, app=staging_app)
+            ref.update(datos)
+            print(f"[Staging] {path} actualizado")
+        else:
+            # Fallback: escribir en DB principal si staging no está disponible
+            db.reference(path).update(datos)
+    except Exception as e:
+        print(f"[Error Staging] {e}")
+
+def push_staging(path, datos):
+    """Push un nodo hijo en la base de datos staging (new-conexion)."""
+    try:
+        if staging_app:
+            from firebase_admin import db as _db
+            ref = _db.reference(path, app=staging_app)
+            ref.push(datos)
+            print(f"[Staging] push en {path}")
+        else:
+            db.reference(path).push(datos)
+    except Exception as e:
+        print(f"[Error Staging push] {e}")
+
 # Sincronizar estado inicial
 actualizar_monitoreo({
     "personas_dentro_actualmente": estado_actual["personas_dentro_actualmente"],
@@ -164,7 +223,7 @@ def registrar_acceso_docente(uid):
             t_salida = datetime.datetime.now()
             minutos = int((t_salida - t_ingreso).total_seconds() / 60)
             
-            # Guardar histórico
+            # Guardar histórico (DB principal)
             ref_accesos = db.reference('accesos')
             ref_accesos.push({
                 "docente": nombre,
@@ -177,6 +236,20 @@ def registrar_acceso_docente(uid):
                 "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
                 "saca_producto": False,
                 "producto_extraido_id": ""
+            })
+            # Espejo en staging (new-conexion)
+            push_staging("accesos", {
+                "docente": nombre,
+                "rol": rol,
+                "metodo": "RFID",
+                "metodo_acceso": "rfid",
+                "codigo_usado": uid,
+                "fecha_hora": ahora_str,
+                "hora_ingreso": estado_actual["hora_ingreso_encargado"],
+                "hora_salida": ahora_str,
+                "tiempo_permanencia_min": minutos,
+                "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
+                "exitoso": True
             })
             
             # Resetear estado
@@ -267,6 +340,9 @@ def recibir_sensores():
         estado = data.get("estado", "CERRADA")  # "ABIERTA" o "CERRADA"
         estado_actual["estado_chapa"] = estado
         actualizar_monitoreo({"estado_chapa": estado})
+        # Espejo en staging (new-conexion)
+        actualizar_staging("puerta_fisica", {"estado": estado, "ultimo_cambio": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+        actualizar_staging("puerta", {"estado": estado, "ultimo_cambio": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         print(f"[PUERTA] Estado del sensor magnético: {estado}")
         
     elif evento == "rfid_leido":
@@ -500,7 +576,7 @@ def acceso_teclado():
     
     print(f"[TECLADO] Acceso por teclado: {nombre} (código: {codigo})")
     
-    # Registrar en la tabla compartida de accesos
+    # Registrar en la tabla compartida de accesos (DB principal)
     ref_accesos = db.reference('accesos')
     ref_accesos.push({
         "docente": nombre,
@@ -512,6 +588,17 @@ def acceso_teclado():
         "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
         "saca_producto": False,
         "producto_extraido_id": ""
+    })
+    # Espejo en staging (new-conexion)
+    push_staging("accesos", {
+        "docente": nombre,
+        "metodo": "CODIGO",
+        "metodo_acceso": "teclado",
+        "codigo_usado": codigo,
+        "fecha_hora": ahora_str,
+        "hora_ingreso": ahora_str,
+        "hora_salida": None,
+        "exitoso": True
     })
     
     # Abrir la puerta
