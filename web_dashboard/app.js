@@ -3,7 +3,7 @@ import { getDatabase, ref, onValue, update, remove, set, get, push } from "https
 
 // --- CONFIGURACIÓN FIREBASE ---
 const firebaseConfig = {
-    databaseURL: "https://complexivo-fv-default-rtdb.firebaseio.com/"
+    databaseURL: "https://aula-4587b-default-rtdb.firebaseio.com/"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -263,14 +263,14 @@ function verificarIntrusion() {
 }
 
 // Sensor PIR
-onValue(ref(db, 'monitoreo/pir'), (snapshot) => {
+onValue(ref(db, 'movimiento_pir'), (snapshot) => {
     const val = snapshot.val();
     currentPirState = (val === true || val === "true" || val === "Movimiento Detectado" || val === 1 || val === "1");
     verificarIntrusion();
 });
 
 // Sensor Puerta (Cerrojo Eléctrico / Estado de la Puerta)
-onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
+onValue(ref(db, 'puerta_fisica/estado'), (snapshot) => {
     const val = snapshot.val();
     const isOpen = (val === true || val === "true" || val === "ABIERTA" || val === "abierta" || val === 1 || val === "1");
     currentPuertaState = isOpen ? 'ABIERTA' : 'CERRADA';
@@ -291,7 +291,7 @@ onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
 });
 
 // Sensor Infrarrojo (Cantidad de Personas / Aforo)
-onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
+onValue(ref(db, 'aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     countPersonas.innerText = personas;
@@ -301,9 +301,11 @@ onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
 });
 
 // --- FIREBASE: CONTROL FOCO INTELIGENTE MERCURY ---
-onValue(ref(db, 'monitoreo/estado_foco'), (snapshot) => {
-    const isEncendido = snapshot.val();
-    if (isEncendido === true || isEncendido === "true") {
+onValue(ref(db, 'movimiento_pir'), (snapshot) => {
+    const raw = snapshot.val();
+    const val = (raw || "").toString().trim().toUpperCase();
+    const isEncendido = (val === "ENCENDIDO" || val === "ON" || val === "TRUE" || val === "1");
+    if (isEncendido) {
         estadoFoco.innerHTML = '<span class="badge badge-green" style="box-shadow: 0 0 10px rgba(16,185,129,0.5);">[Luz] Encendido</span>';
         cardFoco.style.borderColor = 'rgba(16, 185, 129, 0.4)';
         cardFoco.style.boxShadow = '0 10px 30px rgba(16, 185, 129, 0.15)';
@@ -688,7 +690,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
             });
 
             // Clean unregistered UID in Firebase
-            await set(ref(db, 'monitoreo_tiempo_real/ultimo_uid_no_registrado'), null);
+            await set(ref(db, 'ultimo_uid_no_registrado'), null);
 
             // Send welcome email with credentials using SMTPJS (resilient)
             await enviarCorreoConFallback({
@@ -732,7 +734,7 @@ if (btnSeedData) btnSeedData.addEventListener('click', async () => {
     try {
         const seedData = {
             // Sincronizar estado monitoreo
-            'monitoreo_tiempo_real': {
+            'monitoreo': {
                 personas_dentro_actualmente: 2,
                 estado_chapa: "CERRADA",
                 alerta_pir: false,
@@ -1025,7 +1027,7 @@ function detenerAlertaCritica() {
 }
 
 // --- ESCUCHAR ULTIMO UID NO REGISTRADO (REGISTRO RÁPIDO RFID) ---
-onValue(ref(db, 'monitoreo_tiempo_real/ultimo_uid_no_registrado'), (snapshot) => {
+onValue(ref(db, 'ultimo_uid_no_registrado'), (snapshot) => {
     const uidNoReg = snapshot.val();
     const userUidInput = document.getElementById('userUid');
     if (!userUidInput) return;
@@ -1458,7 +1460,7 @@ const toastContainer = document.getElementById('toastContainer');
 
 let currentUnregisteredUid = "";
 
-onValue(ref(db, 'monitoreo_tiempo_real/ultimo_intento_invalido'), (snapshot) => {
+onValue(ref(db, 'ultimo_intento_invalido'), (snapshot) => {
     const data = snapshot.val();
     if (data && data.uid && data.procesado === false) {
         currentUnregisteredUid = data.uid;
@@ -1512,7 +1514,7 @@ btnRegistrarModal.addEventListener('click', async () => {
             Body: `Estimado/a ${nombre},\n\nLe damos la bienvenida al sistema Smart Stock. Se ha registrado su tarjeta RFID con éxito.\n\nSus credenciales de acceso para el dashboard web son:\n- Usuario: ${userWeb}\n- Contraseña Temporal: ${passWeb}\n\nPor favor, conserve estas credenciales de forma segura.\n\nAtentamente,\nSmart Stock System`
         });
 
-        await update(ref(db, 'monitoreo_tiempo_real/ultimo_intento_invalido'), {
+        await update(ref(db, 'ultimo_intento_invalido'), {
             procesado: true
         });
 
@@ -1531,7 +1533,7 @@ btnRegistrarModal.addEventListener('click', async () => {
 });
 
 btnCancelarModal.addEventListener('click', async () => {
-    await update(ref(db, 'monitoreo_tiempo_real/ultimo_intento_invalido'), {
+    await update(ref(db, 'ultimo_intento_invalido'), {
         procesado: true
     });
     modalTarjeta.style.display = 'none';
@@ -1671,7 +1673,7 @@ function actualizarGaugeAforo(personas) {
 }
 
 // Hook gauge into infrarrojo sensor
-onValue(ref(db, 'monitoreo/infrarrojo'), (snapshot) => {
+onValue(ref(db, 'aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     actualizarGaugeAforo(personas);
