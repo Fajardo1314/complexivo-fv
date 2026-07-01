@@ -9,6 +9,28 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+
+// --- SHA-256 HASH HELPER ---
+async function sha256(text) {
+    try {
+        if (window.crypto && window.crypto.subtle) {
+            const msgBuffer = new TextEncoder().encode(text);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+    } catch (e) {
+        console.warn('[Hash] crypto.subtle no disponible, usando fallback.');
+    }
+    // Fallback simple hash para compatibilidad
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+        const chr = text.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0;
+    }
+    return 'fallback_' + Math.abs(hash).toString(16);
+}
 // --- GLOBAL STATE ---
 let usuarioActivo = null;
 
@@ -373,38 +395,34 @@ onValue(ref(db, 'accesos'), (snapshot) => {
     listaAccesos.innerHTML = '';
     const data = snapshot.val();
     if (data) {
-        // Ordenar por más recientes primero
-        const keys = Object.keys(data).reverse();
-        keys.forEach(key => {
-            const acc = data[key];
-
-            const tIngreso = acc.hora_ingreso ? acc.hora_ingreso : '--';
-            const tSalida = acc.hora_salida ? acc.hora_salida : 'Activo';
-            const permanencia = acc.hora_salida ? acc.tiempo_permanencia_min + ' min' : '<span class="badge badge-green">En Aula</span>';
-            const sacaProd = acc.saca_producto ? `<span class="badge badge-orange">Extracción (${acc.producto_extraido_id})</span>` : 'Ninguna';
-
-            // Método de acceso (RFID o Teclado)
-            const metodo = acc.metodo_acceso || 'rfid';
-            const metodoBadge = metodo === 'teclado'
-                ? '<span class="badge badge-blue">[Teclado] Teclado</span>'
-                : '<span class="badge badge-purple">[RFID] RFID</span>';
-            const codigoRef = acc.codigo_usado ? `<br><span style="color:var(--text-muted); font-size:0.75rem; font-family:monospace;">${acc.codigo_usado}</span>` : '';
+        const entries = [];
+        snapshot.forEach(child => {
+            entries.push({ key: child.key, ...child.val() });
+        });
+        entries.reverse().forEach(acc => {
+            const tIngreso = acc.fecha_hora || acc.hora_ingreso || '--';
+            const metodo = acc.metodo || acc.metodo_acceso || 'rfid';
+            const metodoBadge = metodo.includes('RFID')
+                ? '<span class="badge badge-purple">[RFID] RFID</span>'
+                : '<span class="badge badge-blue">[CODIGO] Codigo</span>';
+            const exito = acc.exitoso !== undefined ? (acc.exitoso ? '<span class="badge badge-green">Exitoso</span>' : '<span class="badge badge-red">Denegado</span>') : '--';
+            const motivo = acc.motivo || acc.rol || '';
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${acc.docente}</strong>${codigoRef}</td>
+                <td><strong>${acc.docente || acc.nombre || '--'}</strong></td>
                 <td>${metodoBadge}</td>
-                <td><span style="color:var(--text-muted); font-size:0.85rem;">${acc.rol || ''}</span></td>
+                <td><span style="color:var(--text-muted); font-size:0.85rem;">${motivo}</span></td>
                 <td>${tIngreso}</td>
-                <td>${tSalida}</td>
-                <td>${permanencia}</td>
-                <td><span style="font-weight:700;">${acc.acompanantes_al_ingresar}</span></td>
-                <td>${sacaProd}</td>
+                <td>${acc.hora_salida || 'Activo'}</td>
+                <td>${acc.tiempo_permanencia_min ? acc.tiempo_permanencia_min + ' min' : '--'}</td>
+                <td><span style="font-weight:700;">${acc.acompanantes_al_ingresar || '--'}</span></td>
+                <td>${exito}</td>
             `;
             listaAccesos.appendChild(tr);
         });
     } else {
-        listaAccesos.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No hay registros de acceso.</td></tr>';
+        listaAccesos.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No hay registros de acceso.</td></tr>';
     }
 });
 
@@ -413,7 +431,10 @@ onValue(ref(db, 'usuarios'), (snapshot) => {
     listaUsuarios.innerHTML = '';
     const data = snapshot.val();
     if (data) {
-        Object.keys(data).forEach(key => {
+        Object.keys(data).filter(key => {
+            const r = (data[key].rol || '').toLowerCase();
+            return r === 'docente' || r === 'operador';
+        }).forEach(key => {
             const user = data[key];
             const tr = document.createElement('tr');
             const nombreDocente = user.nombre || '';
@@ -573,10 +594,12 @@ if (btnGuardarWebUsuario) {
 
                 // Generar un ID del nodo basado en username o push
                 const finalKey = username.toLowerCase();
+                const hashedPass = await sha256(password);
                 await set(ref(db, `usuarios_sistema/${finalKey}`), {
                     id_operador: opId,
                     usuario: username,
                     passwordWeb: password,
+                    passwordHash: hashedPass,
                     correo: correo,
                     rol: rol
                 });
@@ -897,7 +920,8 @@ function agregarBotonCambiarContrasena() {
             if (newP.length < 4) { alert('La nueva contraseña debe tener al menos 4 caracteres.'); return; }
 
             try {
-                await update(ref(db, `usuarios_sistema/${usuarioActivo.usuario}`), { passwordWeb: newP });
+                const hashedNewPass = await sha256(newP);
+                await update(ref(db, `usuarios_sistema/${usuarioActivo.usuario}`), { passwordWeb: newP, passwordHash: hashedNewPass });
                 usuarioActivo.passwordWeb = newP;
                 modal.style.display = 'none';
                 crearToast('[OK] Contraseña actualizada correctamente.', 'success');
@@ -1351,13 +1375,17 @@ btnIngresar.addEventListener('click', async () => {
 
         if (snapshot.exists()) {
             const users = snapshot.val();
-            Object.keys(users).forEach(key => {
+            const hashedPass = await sha256(pass);
+            for (const key of Object.keys(users)) {
                 const u = users[key];
-                if (u.usuario === user && u.passwordWeb === pass) {
+                if (!u || !u.usuario) continue;
+                const passMatch = (u.passwordWeb === pass) || (u.passwordHash && u.passwordHash === hashedPass);
+                if (u.usuario === user && passMatch) {
                     authenticatedUser = u;
-                    console.log('[Login] [OK] Credenciales válidas para nodo:', key);
+                    console.log('[Login] OK - Credenciales validas para nodo:', key);
+                    break;
                 }
-            });
+            }
         }
     } catch (dbError) {
         console.error('[Login] ERROR al consultar Firebase:', dbError);
@@ -1694,6 +1722,12 @@ function esAdmin() {
     return rol === 'superadmin' || rol === 'admin' || rol === 'super_admin';
 }
 
+function esDocenteOOperador() {
+    if (!usuarioActivo) return false;
+    const rol = (usuarioActivo.rol || '').toLowerCase();
+    return rol === 'docente' || rol === 'operador';
+}
+
 function aplicarVisibilidadAdmin() {
     // Show/hide "Servidor" button for admin only
     const navBtn = document.querySelector('.nav-btn[data-target="panel-servidor"]');
@@ -1713,6 +1747,12 @@ function aplicarVisibilidadAdmin() {
             btn.style.display = 'none';
         }
     });
+
+    // Docente/Operador: hide servidor panel
+    if (esDocenteOOperador()) {
+        const navServ = document.querySelector('.nav-btn[data-target="panel-servidor"]');
+        if (navServ) navServ.style.display = 'none';
+    }
 
     // Role-based edit restrictions for Docente
     if (userRol === 'Docente') {
@@ -1797,6 +1837,68 @@ if (btnShutdownPi) {
             serverCmdStatus.style.color = 'var(--danger)';
             await registrarAuditoria('Apagar RPi', 'Comando de apagado enviado');
             crearToast('[!] Comando de apagado enviado.', 'danger');
+        } catch (e) { console.error(e); }
+    });
+}
+
+
+// --- CONTROLES DE MONITOREO ---
+const btnToggleFoco = document.getElementById('btnToggleFoco');
+const btnResetAlarma = document.getElementById('btnResetAlarma');
+
+if (btnToggleFoco) {
+    btnToggleFoco.addEventListener('click', async () => {
+        try {
+            const snap = await get(ref(db, 'estado_foco'));
+            const current = (snap.val() || '').toString().trim().toUpperCase();
+            const nuevoEstado = (current === 'ENCENDIDO' || current === 'ON' || current === 'TRUE' || current === '1') ? 'APAGADO' : 'ENCENDIDO';
+            await set(ref(db, 'estado_foco'), nuevoEstado);
+            crearToast('Iluminacion: ' + nuevoEstado, 'success');
+            await registrarAuditoria('Control Iluminacion', 'Estado cambiado a ' + nuevoEstado);
+        } catch (e) {
+            console.error(e);
+            crearToast('Error al controlar iluminacion', 'danger');
+        }
+    });
+}
+
+if (btnResetAlarma) {
+    btnResetAlarma.addEventListener('click', async () => {
+        try {
+            await set(ref(db, 'movimiento_pir'), false);
+            detenerAlertaCritica();
+            crearToast('Alarma PIR reseteada', 'success');
+            await registrarAuditoria('Reset Alarma', 'Alarma PIR reseteada manualmente');
+        } catch (e) {
+            console.error(e);
+            crearToast('Error al resetear alarma', 'danger');
+        }
+    });
+}
+
+// Show alarm reset button when PIR is active
+if (btnResetAlarma) {
+    onValue(ref(db, 'movimiento_pir'), (snapshot) => {
+        const val = snapshot.val();
+        const active = (val === true || val === 'true' || val === 1 || val === '1');
+        btnResetAlarma.style.display = active ? 'block' : 'none';
+    });
+}
+
+// --- BOTON REINICIAR RASPBERRY PI (Admin) ---
+const btnRebootPi = document.getElementById('btnRebootPi');
+if (btnRebootPi) {
+    btnRebootPi.addEventListener('click', async () => {
+        if (!confirm('ATENCION: Reiniciara la Raspberry Pi completamente. Continuar?')) return;
+        try {
+            await set(ref(db, 'sistema/comando'), 'REBOOT');
+            const statusEl = document.getElementById('serverCmdStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Comando REBOOT enviado. La Pi se reiniciara en unos segundos.';
+                statusEl.style.color = 'var(--warning)';
+            }
+            await registrarAuditoria('Reboot RPi', 'Comando REBOOT enviado a la Raspberry Pi');
+            crearToast('[OK] Comando de reinicio enviado.', 'success');
         } catch (e) { console.error(e); }
     });
 }
