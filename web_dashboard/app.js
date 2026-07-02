@@ -348,7 +348,7 @@ onValue(ref(db, 'estado_foco'), (snapshot) => {
     }
 });
 
-// --- FIREBASE: INVENTARIO (9 campos + QR inline) ---
+// --- FIREBASE: INVENTARIO (Tabla limpia + Modales) ---
 let todosLosProductos = {};
 onValue(ref(db, 'inventario'), (snapshot) => {
     listaInventario.innerHTML = '';
@@ -358,54 +358,173 @@ onValue(ref(db, 'inventario'), (snapshot) => {
     if (data) {
         Object.keys(data).forEach(key => {
             const prod = data[key];
-            const ubicacion = prod.ubicacion || 'No asignada';
+            const nombre = prod.nombre || prod.nombre_producto || '—';
+            const marca = prod.marca || '—';
+            const ubicacion = prod.ubicacion || '—';
             const categoria = prod.categoria || 'General';
+            const stock = prod.stock || 0;
             const estado = prod.estado || 'Funcional';
             const estadoBadge = estado === 'Funcional'
                 ? '<span class="badge badge-green">Funcional</span>'
                 : '<span class="badge badge-red">No Funcional</span>';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><span style="font-family:monospace; color:var(--primary); font-weight:700;">${key}</span></td>
-                <td><strong>${prod.nombre || prod.nombre_producto || '—'}</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">${prod.marca || ''}</span></td>
-                <td>${prod.codigo_institucional || '—'}</td>
-                <td><span class="badge ${prod.stock > 0 ? 'badge-green' : 'badge-red'}">${prod.stock || 0} und</span></td>
-                <td>${ubicacion}</td>
+                <td><span style="font-family:monospace; color:var(--primary); font-weight:700; font-size:0.8rem;">${key}</span></td>
+                <td><strong>${nombre}</strong></td>
+                <td>${marca}</td>
                 <td>${categoria}</td>
+                <td>${ubicacion}</td>
+                <td><span class="badge ${stock > 0 ? 'badge-green' : 'badge-red'}">${stock} und</span></td>
                 <td>${estadoBadge}</td>
-                <td><div id="qr-td-${key}" style="width:60px;height:60px;"></div><button class="qr-print-btn" data-id="${key}" style="margin-top:4px;padding:2px 6px;font-size:0.65rem;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨</button></td>
-                <td style="display:flex;gap:4px;flex-wrap:wrap;">
-                    <button class="edit-btn" data-id="${key}">Editar</button>
-                    <button class="delete-btn" data-id="${key}">Eliminar</button>
+                <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+                    <button class="action-btn qr-btn" data-id="${key}" title="Ver QR" style="padding:5px 10px;font-size:0.75rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);color:var(--primary);border-radius:8px;cursor:pointer;font-weight:600;">QR</button>
+                    <button class="action-btn edit-btn" data-id="${key}" title="Editar" style="padding:5px 10px;font-size:0.75rem;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:var(--accent);border-radius:8px;cursor:pointer;font-weight:600;">Editar</button>
+                    <button class="action-btn delete-btn" data-id="${key}" title="Eliminar" style="padding:5px 10px;font-size:0.75rem;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:var(--danger);border-radius:8px;cursor:pointer;font-weight:600;">Eliminar</button>
                 </td>
             `;
-            // Generar QR inline
-            setTimeout(() => {
-                const qrDiv = document.getElementById(`qr-td-${key}`);
-                if (qrDiv && typeof QRCode !== 'undefined') {
-                    qrDiv.innerHTML = '';
-                    const qrUrl = `${window.location.origin}/bodega/escanear?id=${key}`;
-                    new QRCode(qrDiv, { text: qrUrl, width: 55, height: 55, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
-                }
-            }, 100);
-            tr.querySelector('.qr-print-btn').addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                mostrarModalQR(id, prod.nombre || prod.nombre_producto || id);
+            // QR Modal
+            tr.querySelector('.qr-btn').addEventListener('click', (e) => {
+                mostrarModalQR(key, nombre);
             });
+            // Edit
             tr.querySelector('.edit-btn').addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                cargarFormularioProducto(id, prod);
+                cargarFormularioProducto(key, prod);
             });
+            // Delete
             tr.querySelector('.delete-btn').addEventListener('click', (e) => {
-                const id = e.currentTarget.dataset.id;
-                eliminarProducto(id);
+                eliminarProducto(key);
             });
             listaInventario.appendChild(tr);
         });
     } else {
-        listaInventario.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
+        listaInventario.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
     }
 });
+
+// --- MODAL: DETALLES DEL PRODUCTO ---
+function mostrarModalDetalles(id, prod) {
+    let modal = document.getElementById('modal-detalles');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-detalles';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:11000;display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(modal);
+    }
+    const nombre = prod.nombre || prod.nombre_producto || '—';
+    const marca = prod.marca || '—';
+    const desc = prod.descripcion || prod.observaciones || '—';
+    const especs = prod.especificaciones || {};
+    const especsHTML = Object.keys(especs).length > 0
+        ? Object.entries(especs).map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--glass-border);"><span style="color:var(--text-muted);text-transform:capitalize;">${k}</span><span style="font-weight:600;">${v}</span></div>`).join('')
+        : '<p style="color:var(--text-muted);">Sin especificaciones técnicas.</p>';
+    modal.innerHTML = `
+        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:480px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);max-height:80vh;overflow-y:auto;">
+            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">📋 Detalles del Producto</h2>
+            <p style="font-family:monospace;color:var(--primary);font-size:0.8rem;margin-bottom:20px;">${id}</p>
+            <div style="margin-bottom:15px;">
+                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Nombre</p>
+                <p style="font-weight:600;">${nombre}</p>
+            </div>
+            <div style="margin-bottom:15px;">
+                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Marca</p>
+                <p style="font-weight:600;">${marca}</p>
+            </div>
+            <div style="margin-bottom:15px;">
+                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Descripción / Observaciones</p>
+                <p style="font-weight:400;color:var(--text-main);line-height:1.5;">${desc}</p>
+            </div>
+            <h3 style="font-size:0.9rem;font-weight:700;margin:20px 0 10px;color:var(--accent);">Especificaciones Técnicas</h3>
+            ${especsHTML}
+            <button class="secondary-btn" onclick="document.getElementById('modal-detalles').style.display='none'" style="margin-top:20px;width:100%;">Cerrar</button>
+        </div>
+    `;
+    modal.style.display = 'flex';
+}
+
+// --- MODAL: GESTIONAR STOCK (Retirar / Devolver) ---
+function mostrarModalGestionar(id, prod) {
+    if (!usuarioActivo) {
+        mostrarAlertaAccesoDenegado();
+        return;
+    }
+    let modal = document.getElementById('modal-gestionar');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-gestionar';
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:11000;display:flex;align-items:center;justify-content:center;';
+        document.body.appendChild(modal);
+    }
+    const nombre = prod.nombre || prod.nombre_producto || id;
+    const stock = prod.stock || 0;
+    modal.innerHTML = `
+        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:380px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);">
+            <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:5px;">📦 Gestionar Stock</h2>
+            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:20px;">${nombre}</p>
+            <div style="text-align:center;margin-bottom:20px;">
+                <p style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Stock Actual</p>
+                <p id="modal-stock-actual" style="font-size:2.5rem;font-weight:800;color:var(--primary);margin:5px 0;">${stock}</p>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:15px;">
+                <button id="btn-modal-retirar" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#c0392b,#e74c3c);color:white;border:none;font-weight:700;font-size:1rem;cursor:pointer;box-shadow:0 5px 15px rgba(231,76,60,0.3);">- Retirar</button>
+                <button id="btn-modal-devolver" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#27ae60,#2ecc71);color:white;border:none;font-weight:700;font-size:1rem;cursor:pointer;box-shadow:0 5px 15px rgba(46,204,113,0.3);">+ Devolver</button>
+            </div>
+            <div class="input-group" style="margin-bottom:15px;">
+                <label style="font-size:0.8rem;">Cantidad</label>
+                <input type="number" id="modal-stock-cantidad" value="1" min="1" style="width:100%;padding:10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);color:white;font-size:1rem;text-align:center;">
+            </div>
+            <button class="secondary-btn" onclick="document.getElementById('modal-gestionar').style.display='none'" style="width:100%;">Cerrar</button>
+        </div>
+    `;
+    modal.style.display = 'flex';
+
+    document.getElementById('btn-modal-retirar').addEventListener('click', async () => {
+        if (!usuarioActivo) { mostrarAlertaAccesoDenegado(); return; }
+        const cant = parseInt(document.getElementById('modal-stock-cantidad').value) || 1;
+        const nuevoStock = Math.max(0, stock - cant);
+        try {
+            await update(ref(db, `inventario/${id}`), { stock: nuevoStock });
+            await push(ref(db, 'retiros'), {
+                producto_id: id,
+                nombre_producto: nombre,
+                cantidad_retirada: cant,
+                stock_anterior: stock,
+                stock_nuevo: nuevoStock,
+                usuario: usuarioActivo.usuario,
+                fecha: new Date().toLocaleString('es-ES')
+            });
+            await registrarAuditoria('Retiro Material', `Retirado ${cant}x ${nombre} (Stock: ${stock} -> ${nuevoStock})`);
+            crearToast(`[OK] ${cant} unidad(es) retirada(s). Stock: ${nuevoStock}`, 'success');
+            modal.style.display = 'none';
+        } catch (e) { console.error(e); crearToast('Error al retirar material.', 'danger'); }
+    });
+
+    document.getElementById('btn-modal-devolver').addEventListener('click', async () => {
+        if (!usuarioActivo) { mostrarAlertaAccesoDenegado(); return; }
+        const cant = parseInt(document.getElementById('modal-stock-cantidad').value) || 1;
+        const nuevoStock = stock + cant;
+        try {
+            await update(ref(db, `inventario/${id}`), { stock: nuevoStock });
+            await registrarAuditoria('Devolución Material', `Devuelto ${cant}x ${nombre} (Stock: ${stock} -> ${nuevoStock})`);
+            crearToast(`[OK] ${cant} unidad(es) devuelta(s). Stock: ${nuevoStock}`, 'success');
+            modal.style.display = 'none';
+        } catch (e) { console.error(e); crearToast('Error al devolver material.', 'danger'); }
+    });
+}
+
+// --- ALERTA: ACCESO DENEGADO (sin sesión) ---
+function mostrarAlertaAccesoDenegado() {
+    let toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.style.borderLeftColor = 'var(--danger)';
+    toast.innerHTML = '🔒 <strong>Acceso Denegado:</strong> Debe iniciar sesión para modificar el inventario.';
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 5000);
+    // Redirigir al login
+    const loginOverlay = document.getElementById('loginOverlay');
+    const dashboardContainer = document.querySelector('.dashboard-container');
+    if (loginOverlay) loginOverlay.style.display = 'flex';
+    if (dashboardContainer) dashboardContainer.style.display = 'none';
+}
 
 // --- FIREBASE: ACCESOS HISTÓRICOS ---
 onValue(ref(companionDb || db, 'accesos'), (snapshot) => {

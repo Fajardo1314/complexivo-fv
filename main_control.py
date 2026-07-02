@@ -883,7 +883,10 @@ def mqtt_sensor_relay():
 
                 # NUESTRA DB (complexivo-fv): /monitoreo/puerta como BOOLEANO
                 db.reference('monitoreo/puerta').set(puerta_abierta)
-                print(f"  -> [Firebase OUR] /monitoreo/puerta = {puerta_abierta}")
+                # También escribir en /monitoreo/estado_puerta como STRING
+                estado_puerta_str = "ABIERTA" if puerta_abierta else "CERRADA"
+                db.reference('monitoreo/estado_puerta').set(estado_puerta_str)
+                print(f"  -> [Firebase OUR] /monitoreo/puerta = {puerta_abierta}, /monitoreo/estado_puerta = {estado_puerta_str}")
 
                 # COMPANION DB (new-conexion): /puerta_fisica/estado como STRING
                 if staging_app:
