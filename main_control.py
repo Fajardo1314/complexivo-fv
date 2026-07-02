@@ -866,9 +866,16 @@ def mqtt_sensor_relay():
 
             elif topic == "aforo":
                 # Aforo → NUESTRA DB (complexivo-fv) en /monitoreo/aforo
-                val = int(payload) if payload.isdigit() else 0
-                db.reference('monitoreo/aforo').set(val)
-                print(f"  -> [Firebase OUR] /monitoreo/aforo = {val}")
+                try:
+                    payload_limpio = msg.payload.decode('utf-8').strip()
+                    valor_numerico = int(payload_limpio)
+                    db.reference('monitoreo/aforo').set(valor_numerico)
+                    print(f"[DEBUG IR] Enviando aforo numérico a Firebase: {valor_numerico}")
+                    print(f"  -> [Firebase OUR] /monitoreo/aforo = {valor_numerico} (OK)")
+                except ValueError:
+                    print(f"[ERROR IR] No se pudo convertir '{payload_limpio}' a entero")
+                except Exception as e:
+                    print(f"[ERROR IR] Fallo al enviar aforo a Firebase: {e}")
 
             elif topic == "puerta_fisica/estado":
                 # Convertir a booleano: "1" o "true" → True, "0" o "false" → False

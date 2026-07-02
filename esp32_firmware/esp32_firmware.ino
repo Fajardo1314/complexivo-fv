@@ -1,17 +1,22 @@
 /*
- * ESP32 - Firmware MQTT-Only
- * Arquitectura: Publica TODOS los sensores via MQTT local a la RPi.
+ * ESP32 - Firmware MQTT-Only (Sin RFID, Anti-Bloqueo)
+ * Arquitectura: Publica sensores via MQTT local a la RPi.
  * La RPi se encarga de subir los datos a Firebase.
- * Sin Firebase directo, sin actuadores locales.
  *
- * Sensores: PIR, Infrarrojo (aforo), Magnetico (puerta), RFID
+ * Sensores activos:
+ *   - PIR (GPIO 27)
+ *   - IR Aforo (GPIO 32) - INPUT_PULLUP, debounce 1000ms
+ *   - Magnetico Puerta (GPIO 13)
+ *   - BH1750 Luxometro (I2C: SDA=21, SCL=22) - Aislado, no bloqueante
+ *
+ * RFID ELIMINADO: Los accesos se gestionan desde la placa del compañero.
  */
 
-#include <MFRC522.h>
+#include <BH1750.h>
 #include <PubSubClient.h>
-#include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <Wire.h>
 
 // === RED ===
 const char *WIFI_SSID = "ESP32_MQTT_AP";
@@ -23,33 +28,32 @@ const int MQTT_PORT = 1883;
 const char *TOPIC_PIR = "movimiento_pir";
 const char *TOPIC_AFORO = "aforo";
 const char *TOPIC_PUERTA = "puerta_fisica/estado";
-const char *TOPIC_RFID = "accesos";
+const char *TOPIC_LUZ = "aula/luminosidad";
 
 // === Pines ===
-const int PIN_IR1 = 34;
-const int PIN_IR2 = 35;
+const int PIN_IR = 32; // GPIO 32 soporta INPUT_PULLUP (GPIO 34 NO)
 const int PIN_PIR = 27;
 const int PIN_MAGNETICO = 13;
-#define SS_PIN 5
-#define RST_PIN 22
+
+// === BH1750 Luxometro ===
+BH1750 lightMeter;
+bool bh1750_ok = false;
+bool bh1750_error_logged = false; // Imprimir error solo una vez
+unsigned long lastLuzRead = 0;
+const unsigned long INTERVALO_LUZ = 5000; // 5 segundos
 
 // === Tiempos ===
-const unsigned long TIMEOUT_FLUJO = 1500;
-const unsigned long DEBOUNCE_CRUCE = 2000;
+const unsigned long DEBOUNCE_IR = 1000; // 1000ms entre conteos
 const unsigned long INTERVALO_PIR = 5000;
 const unsigned long INTERVALO_PUERTA = 1000;
 const unsigned long INTERVALO_RECONEXION = 30000;
 const unsigned long INTERVALO_RECONEXION_WIFI = 30000;
 
 // === Estado global ===
-MFRC522 rfid(SS_PIN, RST_PIN);
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
 int contadorAforo = 0;
-int last_IR1 = HIGH, last_IR2 = HIGH;
-unsigned long time_IR1_triggered = 0, time_IR2_triggered = 0;
-unsigned long last_cruce_time = 0;
 bool last_pir_state = LOW;
 unsigned long last_pir_post = 0;
 int ultimo_estado_puerta = -1;
@@ -57,23 +61,40 @@ unsigned long ultimo_tiempo_puerta = 0;
 unsigned long ultimo_intento_mqtt = 0;
 unsigned long ultimo_intento_wifi = 0;
 
+// === Estado IR simple ===
+unsigned long irUltimoConteo = 0;
+int irEstadoAnterior = HIGH;
+
 // ============================================================
 //  SETUP
 // ============================================================
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n=== ESP32 MQTT-Only (RPi handles Firebase) ===\n");
+  Serial.println("\n=== ESP32 MQTT-Only (Sin RFID, Anti-Bloqueo) ===\n");
 
-  pinMode(PIN_IR1, INPUT);
-  pinMode(PIN_IR2, INPUT);
+  // PIR y Magnetico
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_MAGNETICO, INPUT_PULLUP);
 
-  SPI.begin();
-  rfid.PCD_Init();
-  Serial.println("[RFID] Inicializado.");
+  // IR Aforo en GPIO 32 con Pull-Up interno
+  // Estado reposo = HIGH, objeto interrumpe = LOW
+  pinMode(PIN_IR, INPUT_PULLUP);
+  irEstadoAnterior = digitalRead(PIN_IR);
+  Serial.println("[IR] GPIO 32 configurado con INPUT_PULLUP.");
 
+  // BH1750 Luxometro via I2C (SDA=21, SCL=22)
+  // Aislado: si falla, no bloquea el resto
+  Wire.begin(21, 22);
+  delay(100);
+  bh1750_ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  if (bh1750_ok) {
+    Serial.println("[BH1750] Luxometro inicializado.");
+  } else {
+    Serial.println("[BH1750] No detectado. Lecturas deshabilitadas.");
+  }
+
+  // WiFi y MQTT
   conectarWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setBufferSize(512);
@@ -97,8 +118,8 @@ void loop() {
 
   procesarFlujo();
   procesarPIR();
-  procesarRFID();
   procesarPuerta();
+  procesarLuz();
 
   delay(50);
 }
@@ -154,6 +175,8 @@ void intentarConexionMQTT() {
   String cid = "ESP32-" + String(random(0, 9999));
   if (mqttClient.connect(cid.c_str())) {
     Serial.println(" OK");
+    mqttClient.publish("aforo", "0");
+    Serial.println("[MQTT] Test publish: aforo = 0");
   } else {
     Serial.print(" FALLO rc=");
     Serial.println(mqttClient.state());
@@ -161,7 +184,7 @@ void intentarConexionMQTT() {
 }
 
 // ============================================================
-//  MQTT: PUBLICAR DATO (solo MQTT, sin Firebase)
+//  MQTT: PUBLICAR DATO
 // ============================================================
 void enviarMQTT(String topic, String valor) {
   Serial.println("[MQTT] " + topic + " = " + valor);
@@ -178,7 +201,7 @@ void enviarMQTTInt(String topic, int valor) {
 }
 
 // ============================================================
-//  SENSOR: PIR
+//  SENSOR: PIR (GPIO 27) - INTACTO
 // ============================================================
 void procesarPIR() {
   bool pir = digitalRead(PIN_PIR) == HIGH;
@@ -202,56 +225,31 @@ void procesarPIR() {
 }
 
 // ============================================================
-//  SENSOR: INFRARROJO DOBLE (AFORO)
+//  SENSOR: INFRARROJO (AFORO) - SIMPLE Y ROBUSTO
+// ============================================================
+// GPIO 32 con INPUT_PULLUP. Reposo = HIGH.
+// Flanco de bajada (HIGH→LOW) = objeto cruzando = +1 conteo.
+// Debounce de 1000ms. Sin while loops, sin bloqueos.
 // ============================================================
 void procesarFlujo() {
-  int ir1 = digitalRead(PIN_IR1);
-  int ir2 = digitalRead(PIN_IR2);
+  int irActual = digitalRead(PIN_IR);
   unsigned long now = millis();
 
-  if (now - last_cruce_time < DEBOUNCE_CRUCE) {
-    last_IR1 = ir1;
-    last_IR2 = ir2;
-    return;
-  }
-
-  if (ir1 == LOW && last_IR1 == HIGH)
-    time_IR1_triggered = now;
-  if (ir2 == LOW && last_IR2 == HIGH)
-    time_IR2_triggered = now;
-
-  if (time_IR1_triggered > 0 && time_IR2_triggered > time_IR1_triggered) {
-    if (time_IR2_triggered - time_IR1_triggered < TIMEOUT_FLUJO) {
+  // Detectar flanco de bajada: HIGH → LOW
+  if (irEstadoAnterior == HIGH && irActual == LOW) {
+    if (now - irUltimoConteo >= DEBOUNCE_IR) {
       contadorAforo++;
+      irUltimoConteo = now;
+      Serial.println("[IR] Conteo +1. Aforo: " + String(contadorAforo));
       enviarMQTTInt(TOPIC_AFORO, contadorAforo);
-      last_cruce_time = now;
     }
-    time_IR1_triggered = 0;
-    time_IR2_triggered = 0;
-  } else if (time_IR2_triggered > 0 &&
-             time_IR1_triggered > time_IR2_triggered) {
-    if (time_IR1_triggered - time_IR2_triggered < TIMEOUT_FLUJO) {
-      contadorAforo--;
-      if (contadorAforo < 0)
-        contadorAforo = 0;
-      enviarMQTTInt(TOPIC_AFORO, contadorAforo);
-      last_cruce_time = now;
-    }
-    time_IR1_triggered = 0;
-    time_IR2_triggered = 0;
   }
 
-  if (time_IR1_triggered > 0 && now - time_IR1_triggered > TIMEOUT_FLUJO)
-    time_IR1_triggered = 0;
-  if (time_IR2_triggered > 0 && now - time_IR2_triggered > TIMEOUT_FLUJO)
-    time_IR2_triggered = 0;
-
-  last_IR1 = ir1;
-  last_IR2 = ir2;
+  irEstadoAnterior = irActual;
 }
 
 // ============================================================
-//  SENSOR: PUERTA MAGNETICA
+//  SENSOR: PUERTA MAGNETICA (GPIO 13) - INTACTO
 // ============================================================
 void procesarPuerta() {
   unsigned long now = millis();
@@ -267,19 +265,30 @@ void procesarPuerta() {
 }
 
 // ============================================================
-//  SENSOR: RFID
+//  SENSOR: BH1750 LUXOMETRO - AISLADO, NO BLOQUEANTE
 // ============================================================
-void procesarRFID() {
-  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial())
+// Si el sensor falla, imprime el error UNA sola vez y deja de
+// intentar. El resto de sensores siguen a maxima velocidad.
+// ============================================================
+void procesarLuz() {
+  if (!bh1750_ok)
     return;
 
-  String uid = "";
-  for (byte i = 0; i < rfid.uid.size; i++) {
-    if (rfid.uid.uidByte[i] < 0x10)
-      uid += "0";
-    uid += String(rfid.uid.uidByte[i], HEX);
+  unsigned long now = millis();
+  if (now - lastLuzRead < INTERVALO_LUZ)
+    return;
+  lastLuzRead = now;
+
+  float lux = lightMeter.readLightLevel();
+  if (lux < 0) {
+    // Error de lectura: imprimir una sola vez y desactivar
+    if (!bh1750_error_logged) {
+      Serial.println("[BH1750] Error de lectura. Desactivando luxometro.");
+      bh1750_error_logged = true;
+    }
+    bh1750_ok = false;
+    return;
   }
-  uid.toUpperCase();
-  enviarMQTT(TOPIC_RFID, uid);
-  rfid.PICC_HaltA();
+
+  enviarMQTTInt(TOPIC_LUZ, (int)lux);
 }

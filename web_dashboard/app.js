@@ -348,7 +348,7 @@ onValue(ref(db, 'estado_foco'), (snapshot) => {
     }
 });
 
-// --- FIREBASE: INVENTARIO ---
+// --- FIREBASE: INVENTARIO (9 campos + QR inline) ---
 let todosLosProductos = {};
 onValue(ref(db, 'inventario'), (snapshot) => {
     listaInventario.innerHTML = '';
@@ -367,21 +367,30 @@ onValue(ref(db, 'inventario'), (snapshot) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><span style="font-family:monospace; color:var(--primary); font-weight:700;">${key}</span></td>
-                <td>${prod.nombre_producto}</td>
-                <td><span class="badge ${prod.stock > 0 ? 'badge-green' : 'badge-red'}">${prod.stock} unidades</span></td>
+                <td><strong>${prod.nombre || prod.nombre_producto || '—'}</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">${prod.marca || ''}</span></td>
+                <td>${prod.codigo_institucional || '—'}</td>
+                <td><span class="badge ${prod.stock > 0 ? 'badge-green' : 'badge-red'}">${prod.stock || 0} und</span></td>
                 <td>${ubicacion}</td>
                 <td>${categoria}</td>
                 <td>${estadoBadge}</td>
-                <td>
+                <td><div id="qr-td-${key}" style="width:60px;height:60px;"></div><button class="qr-print-btn" data-id="${key}" style="margin-top:4px;padding:2px 6px;font-size:0.65rem;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;">🖨</button></td>
+                <td style="display:flex;gap:4px;flex-wrap:wrap;">
                     <button class="edit-btn" data-id="${key}">Editar</button>
                     <button class="delete-btn" data-id="${key}">Eliminar</button>
-                    <button class="qr-btn" data-id="${key}" data-nombre="${prod.nombre_producto}" style="padding:6px 12px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4); color:var(--primary); border-radius:8px; font-weight:600; cursor:pointer; transition:all 0.2s;">QR</button>
                 </td>
             `;
-            tr.querySelector('.qr-btn').addEventListener('click', (e) => {
+            // Generar QR inline
+            setTimeout(() => {
+                const qrDiv = document.getElementById(`qr-td-${key}`);
+                if (qrDiv && typeof QRCode !== 'undefined') {
+                    qrDiv.innerHTML = '';
+                    const qrUrl = `${window.location.origin}/bodega/escanear?id=${key}`;
+                    new QRCode(qrDiv, { text: qrUrl, width: 55, height: 55, colorDark: "#0f172a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+                }
+            }, 100);
+            tr.querySelector('.qr-print-btn').addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
-                const nombre = e.currentTarget.dataset.nombre;
-                mostrarModalQR(id, nombre);
+                mostrarModalQR(id, prod.nombre || prod.nombre_producto || id);
             });
             tr.querySelector('.edit-btn').addEventListener('click', (e) => {
                 const id = e.currentTarget.dataset.id;
@@ -394,7 +403,7 @@ onValue(ref(db, 'inventario'), (snapshot) => {
             listaInventario.appendChild(tr);
         });
     } else {
-        listaInventario.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
+        listaInventario.innerHTML = '<tr><td colspan="9" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
     }
 });
 
@@ -1131,8 +1140,8 @@ function mostrarModalQR(idProd, nombreProd) {
     document.getElementById('modal-product-name').innerText = nombreProd;
     document.getElementById('modal-qr-label').innerText = idProd;
 
-    // Generar URL del servidor dinámica apuntando al backend en el puerto 5000
-    const qrUrl = `${window.location.origin}/retiro.html?id=${idProd}`;
+    // Generar URL del servidor dinámica para escaneo móvil
+    const qrUrl = `${window.location.origin}/bodega/escanear?id=${idProd}`;
 
     const qrContainer = document.getElementById('modal-qr-preview');
     qrContainer.innerHTML = '';

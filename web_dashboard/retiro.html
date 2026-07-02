@@ -4,20 +4,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retiro de Producto - Smart Stock</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>Bodega - Smart Stock</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0d0907;
-            --glass-bg: rgba(30, 20, 12, 0.55);
-            --glass-border: rgba(180, 140, 90, 0.12);
+            --bg: #0d0907;
+            --glass: rgba(30, 20, 12, 0.55);
+            --border: rgba(180, 140, 90, 0.12);
             --primary: #c8956c;
             --accent: #d4a574;
-            --text-main: #f5efe8;
-            --text-muted: #a89480;
+            --text: #f5efe8;
+            --muted: #a89480;
             --danger: #e05252;
             --success: #6db87a;
         }
@@ -30,206 +28,150 @@
         }
 
         body {
-            background: var(--bg-color);
-            color: var(--text-main);
+            background: radial-gradient(circle at 10% 20%, #2a1a10 0%, #0d0907 90%);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: radial-gradient(circle at 10% 20%, #2a1a10 0%, #0d0907 90%);
             padding: 20px;
         }
 
         .card {
-            background: var(--glass-bg);
+            background: var(--glass);
             backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
+            border: 1px solid var(--border);
             border-radius: 20px;
-            padding: 35px;
+            padding: 30px;
             max-width: 480px;
             width: 100%;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
         }
 
-        .card h1 {
-            font-size: 1.5rem;
+        h1 {
+            font-size: 1.4rem;
             font-weight: 800;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
-        .card .subtitle {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            margin-bottom: 25px;
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .info-row .label {
-            color: var(--text-muted);
+        .sub {
+            color: var(--muted);
             font-size: 0.85rem;
-        }
-
-        .info-row .value {
-            font-weight: 600;
-            font-size: 0.95rem;
+            margin-bottom: 20px;
         }
 
         .stock-big {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             font-weight: 900;
             color: var(--primary);
             text-align: center;
-            margin: 20px 0;
+            margin: 15px 0;
         }
 
-        .stock-big span {
-            font-size: 1rem;
-            color: var(--text-muted);
+        .stock-big small {
+            font-size: 0.9rem;
+            color: var(--muted);
             display: block;
             font-weight: 500;
         }
 
-        input[type="number"] {
-            width: 100%;
-            padding: 14px 16px;
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            color: white;
-            font-size: 1.1rem;
-            text-align: center;
-            outline: none;
-            margin: 10px 0;
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
         }
 
-        input[type="number"]:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 12px rgba(200, 149, 108, 0.35);
+        .row .lbl {
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .row .val {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 18px;
         }
 
         .btn {
-            width: 100%;
             padding: 14px;
             border: none;
             border-radius: 12px;
             font-size: 1rem;
             font-weight: 700;
             cursor: pointer;
-            margin-top: 10px;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            transition: all 0.3s;
+            gap: 6px;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), var(--accent));
-            color: white;
+        .btn:active {
+            transform: scale(0.97);
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(139, 94, 60, 0.4);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .btn-danger {
+        .btn-retiro {
             background: linear-gradient(135deg, #c0392b, #e74c3c);
-            color: white;
+            color: #fff;
         }
 
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
-            margin-top: 10px;
-        }
-
-        .btn-success {
+        .btn-devolucion {
             background: linear-gradient(135deg, #27ae60, #2ecc71);
-            color: white;
+            color: #fff;
         }
 
-        .alert {
-            padding: 12px 16px;
+        .btn-retiro:disabled,
+        .btn-devolucion:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .btn-back {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 14px;
+            font-size: 0.9rem;
+        }
+
+        .msg {
+            padding: 12px;
             border-radius: 10px;
             font-size: 0.85rem;
             font-weight: 600;
-            margin: 10px 0;
             text-align: center;
+            margin-top: 12px;
+            display: none;
         }
 
-        .alert-success {
+        .msg-ok {
             background: rgba(109, 184, 122, 0.15);
             border: 1px solid rgba(109, 184, 122, 0.3);
             color: var(--success);
         }
 
-        .alert-danger {
+        .msg-err {
             background: rgba(224, 82, 82, 0.15);
             border: 1px solid rgba(224, 82, 82, 0.3);
             color: var(--danger);
         }
 
-        .alert-info {
-            background: rgba(200, 149, 108, 0.15);
-            border: 1px solid rgba(200, 149, 108, 0.3);
-            color: var(--primary);
-        }
-
-        .login-section {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid var(--glass-border);
-        }
-
-        .login-section h3 {
-            font-size: 1rem;
-            margin-bottom: 12px;
-        }
-
-        .login-section input {
-            width: 100%;
-            padding: 12px 14px;
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            color: white;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-            outline: none;
-        }
-
-        .login-section input:focus {
-            border-color: var(--primary);
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
         .badge {
-            padding: 4px 10px;
+            padding: 3px 9px;
             border-radius: 20px;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 700;
             display: inline-block;
         }
@@ -245,72 +187,54 @@
             color: var(--danger);
             border: 1px solid rgba(224, 82, 82, 0.3);
         }
+
+        .notfound {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .notfound h2 {
+            color: var(--danger);
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 
 <body>
-    <div class="card" id="mainCard">
-        <div id="loadingState" style="text-align:center; padding: 40px 0;">
-            <p style="color: var(--text-muted);">Cargando producto...</p>
+    <div class="card">
+        <div id="loading" style="text-align:center;padding:40px 0;">
+            <p style="color:var(--muted)">Cargando...</p>
         </div>
 
-        <div id="productInfo" class="hidden">
-            <h1 id="prodNombre">—</h1>
-            <p class="subtitle">Retiro de material del inventario</p>
+        <div id="productInfo" style="display:none">
+            <h1 id="pNombre">—</h1>
+            <p class="sub" id="pMarca">—</p>
 
-            <div class="stock-big">
-                <span id="prodStockNum">0</span>
-                <span>unidades disponibles</span>
+            <div class="stock-big"><span id="pStock">0</span><small>unidades disponibles</small></div>
+
+            <div class="row"><span class="lbl">Código Sistema</span><span class="val" id="pCodigo">—</span></div>
+            <div class="row"><span class="lbl">Cód. Institucional</span><span class="val" id="pCodInst">—</span></div>
+            <div class="row"><span class="lbl">Categoría</span><span class="val" id="pCategoria">—</span></div>
+            <div class="row"><span class="lbl">Ubicación</span><span class="val" id="pUbicacion">—</span></div>
+            <div class="row"><span class="lbl">Estado</span><span class="val" id="pEstado">—</span></div>
+            <div class="row" id="pSpecsRow" style="display:none"><span class="lbl">Especificaciones</span><span
+                    class="val" id="pSpecs">—</span></div>
+
+            <div class="actions">
+                <button class="btn btn-retiro" id="btnRetirar" onclick="retirar()">📦 Retirar (-1)</button>
+                <button class="btn btn-devolucion" id="btnDevolver" onclick="devolver()">📥 Devolver (+1)</button>
             </div>
 
-            <div class="info-row"><span class="label">Código</span><span class="value" id="prodId">—</span></div>
-            <div class="info-row"><span class="label">Ubicación</span><span class="value" id="prodUbicacion">—</span>
-            </div>
-            <div class="info-row"><span class="label">Categoría</span><span class="value" id="prodCategoria">—</span>
-            </div>
-            <div class="info-row"><span class="label">Estado</span><span class="value" id="prodEstado">—</span></div>
+            <div class="msg msg-ok" id="msgOk"></div>
+            <div class="msg msg-err" id="msgErr"></div>
 
-            <div id="retiroSection">
-                <div class="alert alert-info" id="loginRequiredMsg">
-                    Para retirar material debes iniciar sesión en el sistema.
-                </div>
-
-                <!-- Login form (shown when not logged in) -->
-                <div class="login-section" id="loginFormRetiro">
-                    <h3>🔐 Iniciar Sesión para Retirar</h3>
-                    <input type="text" id="retiroUser" placeholder="Usuario">
-                    <input type="password" id="retiroPass" placeholder="Contraseña">
-                    <button class="btn btn-primary" id="btnLoginRetiro">Iniciar Sesión</button>
-                </div>
-
-                <!-- Withdrawal form (shown when logged in) -->
-                <div id="withdrawForm" class="hidden">
-                    <div class="alert alert-success" id="userLoggedMsg"></div>
-                    <label
-                        style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cantidad
-                        a retirar</label>
-                    <input type="number" id="retiroCantidad" min="1" value="1" placeholder="Cantidad">
-                    <button class="btn btn-danger" id="btnRetirar">📦 Retirar Producto</button>
-                </div>
-            </div>
-
-            <div id="successMsg" class="hidden">
-                <div class="alert alert-success" style="font-size: 1rem; padding: 20px;">
-                    ✅ Retiro registrado exitosamente
-                </div>
-                <p style="text-align: center; color: var(--text-muted); margin-top: 10px;" id="retiroDetalle"></p>
-            </div>
-
-            <button class="btn btn-secondary" onclick="window.location.href='/'" style="margin-top: 15px;">← Volver al
-                Dashboard</button>
+            <button class="btn-back" onclick="window.location.href='/'">← Volver al Dashboard</button>
         </div>
 
-        <div id="notFoundState" class="hidden" style="text-align: center; padding: 40px 0;">
-            <h2 style="color: var(--danger);">Producto no encontrado</h2>
-            <p style="color: var(--text-muted); margin-top: 10px;">El código QR no corresponde a ningún producto en el
-                inventario.</p>
-            <button class="btn btn-secondary" onclick="window.location.href='/'" style="margin-top: 20px;">← Volver al
-                Dashboard</button>
+        <div id="notFound" class="notfound" style="display:none">
+            <h2>Producto no encontrado</h2>
+            <p style="color:var(--muted)">El código QR no corresponde a ningún artículo.</p>
+            <button class="btn-back" onclick="window.location.href='/'">← Volver</button>
         </div>
     </div>
 
@@ -318,167 +242,106 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, get, update, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        const firebaseConfig = { databaseURL: "https://complexivo-fv-default-rtdb.firebaseio.com/" };
-        const app = initializeApp(firebaseConfig);
+        const app = initializeApp({ databaseURL: "https://complexivo-fv-default-rtdb.firebaseio.com/" });
         const db = getDatabase(app);
 
         const params = new URLSearchParams(window.location.search);
         const productId = params.get('id');
+        let prod = null;
 
-        let productData = null;
-        let currentUser = null;
-
-        // DOM elements
-        const loadingState = document.getElementById('loadingState');
-        const productInfo = document.getElementById('productInfo');
-        const notFoundState = document.getElementById('notFoundState');
-        const loginFormRetiro = document.getElementById('loginFormRetiro');
-        const withdrawForm = document.getElementById('withdrawForm');
-        const successMsg = document.getElementById('successMsg');
-        const loginRequiredMsg = document.getElementById('loginRequiredMsg');
-        const userLoggedMsg = document.getElementById('userLoggedMsg');
-        const retiroDetalle = document.getElementById('retiroDetalle');
-
-        async function loadProduct() {
-            if (!productId) {
-                loadingState.classList.add('hidden');
-                notFoundState.classList.remove('hidden');
-                return;
-            }
-
+        async function load() {
+            if (!productId) { showNotFound(); return; }
             try {
-                const snapshot = await get(ref(db, `inventario/${productId}`));
-                if (!snapshot.exists()) {
-                    loadingState.classList.add('hidden');
-                    notFoundState.classList.remove('hidden');
-                    return;
-                }
-
-                productData = snapshot.val();
-                loadingState.classList.add('hidden');
-                productInfo.classList.remove('hidden');
-
-                document.getElementById('prodNombre').textContent = productData.nombre_producto || '—';
-                document.getElementById('prodId').textContent = productId;
-                document.getElementById('prodUbicacion').textContent = productData.ubicacion || 'No asignada';
-                document.getElementById('prodCategoria').textContent = productData.categoria || 'General';
-                document.getElementById('prodEstado').textContent = productData.estado || 'Funcional';
-                updateStockDisplay(productData.stock || 0);
+                const snap = await get(ref(db, `inventario/${productId}`));
+                if (!snap.exists()) { showNotFound(); return; }
+                prod = snap.val();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('productInfo').style.display = 'block';
+                render();
             } catch (e) {
-                console.error('Error loading product:', e);
-                loadingState.innerHTML = '<p style="color: var(--danger);">Error al cargar el producto.</p>';
+                document.getElementById('loading').innerHTML = '<p style="color:var(--danger)">Error al cargar.</p>';
             }
         }
 
-        function updateStockDisplay(stock) {
-            document.getElementById('prodStockNum').textContent = stock;
-            const retiroCantidad = document.getElementById('retiroCantidad');
-            retiroCantidad.max = stock;
-            if (parseInt(retiroCantidad.value) > stock) retiroCantidad.value = stock;
-            if (stock <= 0) {
-                document.getElementById('btnRetirar').disabled = true;
-                document.getElementById('retiroCantidad').disabled = true;
+        function showNotFound() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('notFound').style.display = 'block';
+        }
+
+        function render() {
+            document.getElementById('pNombre').textContent = prod.nombre || '—';
+            document.getElementById('pMarca').textContent = prod.marca || '';
+            document.getElementById('pCodigo').textContent = prod.codigo_sistema || productId;
+            document.getElementById('pCodInst').textContent = prod.codigo_institucional || '—';
+            document.getElementById('pCategoria').textContent = prod.categoria || '—';
+            document.getElementById('pUbicacion').textContent = prod.ubicacion || '—';
+            const estado = prod.estado || 'Funcional';
+            document.getElementById('pEstado').innerHTML = estado === 'Funcional'
+                ? '<span class="badge badge-green">Funcional</span>'
+                : '<span class="badge badge-red">No Funcional</span>';
+            updateStock(prod.stock || 0);
+
+            // Mostrar especificaciones si existen
+            const esp = prod.especificaciones;
+            if (esp && (esp.procesador || esp.ram || esp.almacenamiento)) {
+                document.getElementById('pSpecsRow').style.display = 'flex';
+                let parts = [];
+                if (esp.procesador) parts.push(esp.procesador);
+                if (esp.ram) parts.push(esp.ram);
+                if (esp.almacenamiento) parts.push(esp.almacenamiento);
+                if (esp.componentes_adicionales) parts.push(esp.componentes_adicionales);
+                document.getElementById('pSpecs').textContent = parts.join(' | ');
             }
         }
 
-        // Login for withdrawal
-        document.getElementById('btnLoginRetiro').addEventListener('click', async () => {
-            const user = document.getElementById('retiroUser').value.trim();
-            const pass = document.getElementById('retiroPass').value.trim();
-            if (!user || !pass) { alert('Ingresa usuario y contraseña.'); return; }
+        function updateStock(n) {
+            document.getElementById('pStock').textContent = n;
+            document.getElementById('btnRetirar').disabled = (n <= 0);
+        }
 
-            const btn = document.getElementById('btnLoginRetiro');
-            btn.disabled = true;
-            btn.textContent = 'Verificando...';
+        function showMsg(type, text) {
+            const el = document.getElementById(type === 'ok' ? 'msgOk' : 'msgErr');
+            el.textContent = text;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 4000);
+        }
 
+        window.retirar = async function () {
+            if (!prod) return;
+            const stock = prod.stock || 0;
+            if (stock <= 0) { showMsg('err', 'Sin stock disponible.'); return; }
+            const nuevo = stock - 1;
             try {
-                const snapshot = await get(ref(db, 'usuarios_sistema'));
-                if (snapshot.exists()) {
-                    const users = snapshot.val();
-                    Object.keys(users).forEach(key => {
-                        const u = users[key];
-                        if (u.usuario === user && u.passwordWeb === pass) {
-                            currentUser = u;
-                        }
-                    });
-                }
-            } catch (e) {
-                console.error(e);
-            }
-
-            btn.disabled = false;
-            btn.textContent = 'Iniciar Sesión';
-
-            if (!currentUser) {
-                alert('Credenciales incorrectas.');
-                return;
-            }
-
-            // Show withdrawal form
-            loginFormRetiro.classList.add('hidden');
-            loginRequiredMsg.classList.add('hidden');
-            withdrawForm.classList.remove('hidden');
-            userLoggedMsg.textContent = `👤 Sesión activa: ${currentUser.usuario} (${currentUser.rol})`;
-        });
-
-        // Withdraw product
-        document.getElementById('btnRetirar').addEventListener('click', async () => {
-            if (!currentUser || !productData) return;
-
-            const cantidad = parseInt(document.getElementById('retiroCantidad').value);
-            const stockActual = productData.stock || 0;
-
-            if (cantidad <= 0) { alert('La cantidad debe ser mayor a 0.'); return; }
-            if (cantidad > stockActual) { alert(`Solo hay ${stockActual} unidades disponibles.`); return; }
-
-            const btn = document.getElementById('btnRetirar');
-            btn.disabled = true;
-            btn.textContent = 'Procesando...';
-
-            try {
-                const nuevoStock = stockActual - cantidad;
-                await update(ref(db, `inventario/${productId}`), { stock: nuevoStock });
-
-                // Record withdrawal
+                await update(ref(db, `inventario/${productId}`), { stock: nuevo });
                 await push(ref(db, 'retiros'), {
-                    producto_id: productId,
-                    nombre_producto: productData.nombre_producto,
-                    cantidad_retirada: cantidad,
-                    stock_anterior: stockActual,
-                    stock_nuevo: nuevoStock,
-                    usuario: currentUser.usuario,
-                    id_operador: currentUser.id_operador || '---',
-                    rol: currentUser.rol,
-                    fecha: new Date().toLocaleString('es-ES')
+                    producto_id: productId, nombre_producto: prod.nombre,
+                    cantidad_retirada: 1, stock_anterior: stock, stock_nuevo: nuevo,
+                    usuario: 'Móvil QR', fecha: new Date().toLocaleString('es-ES')
                 });
+                prod.stock = nuevo;
+                updateStock(nuevo);
+                showMsg('ok', `✅ Retirado. Stock: ${nuevo}`);
+            } catch (e) { showMsg('err', 'Error al retirar.'); }
+        };
 
-                // Audit
-                await push(ref(db, 'auditoria'), {
-                    timestamp: new Date().toLocaleString('es-ES'),
-                    id_operador: currentUser.id_operador || '---',
-                    usuario: currentUser.usuario,
-                    rol: currentUser.rol,
-                    accion: 'Retiro de Producto',
-                    detalles: `Retiró ${cantidad} unidad(es) de "${productData.nombre_producto}" (ID: ${productId}). Stock: ${stockActual} → ${nuevoStock}`
+        window.devolver = async function () {
+            if (!prod) return;
+            const stock = prod.stock || 0;
+            const nuevo = stock + 1;
+            try {
+                await update(ref(db, `inventario/${productId}`), { stock: nuevo });
+                await push(ref(db, 'retiros'), {
+                    producto_id: productId, nombre_producto: prod.nombre,
+                    cantidad_retirada: -1, stock_anterior: stock, stock_nuevo: nuevo,
+                    usuario: 'Móvil QR (devolución)', fecha: new Date().toLocaleString('es-ES')
                 });
+                prod.stock = nuevo;
+                updateStock(nuevo);
+                showMsg('ok', `✅ Devuelto. Stock: ${nuevo}`);
+            } catch (e) { showMsg('err', 'Error al devolver.'); }
+        };
 
-                // Show success
-                withdrawForm.classList.add('hidden');
-                successMsg.classList.remove('hidden');
-                retiroDetalle.textContent = `${cantidad} unidad(es) de "${productData.nombre_producto}" retirada(s). Stock restante: ${nuevoStock}`;
-
-                updateStockDisplay(nuevoStock);
-                productData.stock = nuevoStock;
-
-            } catch (e) {
-                console.error(e);
-                alert('Error al procesar el retiro.');
-                btn.disabled = false;
-                btn.textContent = '📦 Retirar Producto';
-            }
-        });
-
-        loadProduct();
+        load();
     </script>
 </body>
 
