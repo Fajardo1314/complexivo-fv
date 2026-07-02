@@ -1,15 +1,15 @@
 /*
- * ESP32 - Firmware MQTT-Only (Sin RFID, Anti-Bloqueo)
+ * ESP32 - Firmware MQTT-Only (Sin RFID, Anti-Bloqueo, Candado IR)
  * Arquitectura: Publica sensores via MQTT local a la RPi.
  * La RPi se encarga de subir los datos a Firebase.
  *
  * Sensores activos:
  *   - PIR (GPIO 27)
- *   - IR Aforo (GPIO 32) - INPUT_PULLUP, debounce 1000ms
+ *   - IR Aforo (GPIO 32) - INPUT_PULLUP, candado booleano + debounce
  *   - Magnetico Puerta (GPIO 13)
- *   - BH1750 Luxometro (I2C: SDA=21, SCL=22) - Aislado, no bloqueante
+ *   - BH1750 Luxometro (I2C: SDA=21, SCL=22) - Aislado
  *
- * RFID ELIMINADO: Los accesos se gestionan desde la placa del compañero.
+ * RFID ELIMINADO.
  */
 
 #include <BH1750.h>
@@ -22,7 +22,7 @@
 const char *WIFI_SSID = "ESP32_MQTT_AP";
 const char *WIFI_PASSWORD = "taipt_iot_2026";
 
-// === MQTT (Raspberry Pi - broker local) ===
+// === MQTT ===
 const char *MQTT_BROKER = "10.42.0.1";
 const int MQTT_PORT = 1883;
 const char *TOPIC_PIR = "movimiento_pir";
@@ -31,19 +31,19 @@ const char *TOPIC_PUERTA = "puerta_fisica/estado";
 const char *TOPIC_LUZ = "aula/luminosidad";
 
 // === Pines ===
-const int PIN_IR = 32; // GPIO 32 soporta INPUT_PULLUP (GPIO 34 NO)
+const int PIN_IR = 32;
 const int PIN_PIR = 27;
 const int PIN_MAGNETICO = 13;
 
-// === BH1750 Luxometro ===
+// === BH1750 ===
 BH1750 lightMeter;
 bool bh1750_ok = false;
-bool bh1750_error_logged = false; // Imprimir error solo una vez
+bool bh1750_error_logged = false;
 unsigned long lastLuzRead = 0;
-const unsigned long INTERVALO_LUZ = 5000; // 5 segundos
+const unsigned long INTERVALO_LUZ = 5000;
 
 // === Tiempos ===
-const unsigned long DEBOUNCE_IR = 1000; // 1000ms entre conteos
+const unsigned long DEBOUNCE_IR = 1000;
 const unsigned long INTERVALO_PIR = 5000;
 const unsigned long INTERVALO_PUERTA = 1000;
 const unsigned long INTERVALO_RECONEXION = 30000;
@@ -61,9 +61,13 @@ unsigned long ultimo_tiempo_puerta = 0;
 unsigned long ultimo_intento_mqtt = 0;
 unsigned long ultimo_intento_wifi = 0;
 
-// === Estado IR simple ===
+// === Estado IR con confirmacion por tiempo ===
+// El pin debe permanecer LOW por 200ms continuos para confirmar cruce real
+bool ir_en_espera = false;
+bool ir_detectando = false;
+unsigned long irTiempoDeteccion = 0;
 unsigned long irUltimoConteo = 0;
-int irEstadoAnterior = HIGH;
+const unsigned long IR_CONFIRMACION = 200; // 200ms LOW continuo = cruce real
 
 // ============================================================
 //  SETUP
@@ -71,20 +75,13 @@ int irEstadoAnterior = HIGH;
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n=== ESP32 MQTT-Only (Sin RFID, Anti-Bloqueo) ===\n");
+  Serial.println("\n=== ESP32 MQTT-Only (Sin RFID, Candado IR) ===\n");
 
-  // PIR y Magnetico
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_MAGNETICO, INPUT_PULLUP);
-
-  // IR Aforo en GPIO 32 con Pull-Up interno
-  // Estado reposo = HIGH, objeto interrumpe = LOW
   pinMode(PIN_IR, INPUT_PULLUP);
-  irEstadoAnterior = digitalRead(PIN_IR);
   Serial.println("[IR] GPIO 32 configurado con INPUT_PULLUP.");
 
-  // BH1750 Luxometro via I2C (SDA=21, SCL=22)
-  // Aislado: si falla, no bloquea el resto
   Wire.begin(21, 22);
   delay(100);
   bh1750_ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
@@ -94,7 +91,6 @@ void setup() {
     Serial.println("[BH1750] No detectado. Lecturas deshabilitadas.");
   }
 
-  // WiFi y MQTT
   conectarWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setBufferSize(512);
@@ -225,27 +221,52 @@ void procesarPIR() {
 }
 
 // ============================================================
-//  SENSOR: INFRARROJO (AFORO) - SIMPLE Y ROBUSTO
+//  SENSOR: INFRARROJO (AFORO) - CONFIRMACION POR TIEMPO
 // ============================================================
 // GPIO 32 con INPUT_PULLUP. Reposo = HIGH.
-// Flanco de bajada (HIGH→LOW) = objeto cruzando = +1 conteo.
-// Debounce de 1000ms. Sin while loops, sin bloqueos.
+// Logica anti-ruido en 3 pasos:
+//   1. Pin baja a LOW → iniciar temporizador de confirmacion
+//   2. Si el pin permanece LOW por 200ms seguidos → cruce REAL confirmado
+//   3. Contar +1, activar candado, esperar a que el pin vuelva a HIGH
+// Esto elimina TODOS los picos de ruido menores a 200ms.
 // ============================================================
 void procesarFlujo() {
   int irActual = digitalRead(PIN_IR);
   unsigned long now = millis();
 
-  // Detectar flanco de bajada: HIGH → LOW
-  if (irEstadoAnterior == HIGH && irActual == LOW) {
-    if (now - irUltimoConteo >= DEBOUNCE_IR) {
-      contadorAforo++;
-      irUltimoConteo = now;
-      Serial.println("[IR] Conteo +1. Aforo: " + String(contadorAforo));
-      enviarMQTTInt(TOPIC_AFORO, contadorAforo);
+  // FASE 1: Candado activo - esperar a que el pin vuelva a HIGH
+  if (ir_en_espera) {
+    if (irActual == HIGH) {
+      ir_en_espera = false;
+      ir_detectando = false;
+      Serial.println("[IR] Liberado. Listo.");
     }
+    return;
   }
 
-  irEstadoAnterior = irActual;
+  // FASE 2: Pin bajo - iniciar o continuar confirmacion
+  if (irActual == LOW) {
+    if (!ir_detectando) {
+      // Primera vez que vemos LOW - iniciar temporizador
+      ir_detectando = true;
+      irTiempoDeteccion = now;
+    } else if (now - irTiempoDeteccion >= IR_CONFIRMACION) {
+      // 200ms continuos en LOW - CRUCE REAL CONFIRMADO
+      if (now - irUltimoConteo >= DEBOUNCE_IR) {
+        contadorAforo++;
+        irUltimoConteo = now;
+        ir_en_espera = true;
+        ir_detectando = false;
+        Serial.println("[IR] CRUCE CONFIRMADO. Aforo: " +
+                       String(contadorAforo));
+        enviarMQTTInt(TOPIC_AFORO, contadorAforo);
+      }
+    }
+    // Si no paso la confirmacion aun, seguir esperando
+  } else {
+    // Pin volvio a HIGH antes de 200ms - era ruido, cancelar
+    ir_detectando = false;
+  }
 }
 
 // ============================================================
@@ -267,9 +288,6 @@ void procesarPuerta() {
 // ============================================================
 //  SENSOR: BH1750 LUXOMETRO - AISLADO, NO BLOQUEANTE
 // ============================================================
-// Si el sensor falla, imprime el error UNA sola vez y deja de
-// intentar. El resto de sensores siguen a maxima velocidad.
-// ============================================================
 void procesarLuz() {
   if (!bh1750_ok)
     return;
@@ -281,7 +299,6 @@ void procesarLuz() {
 
   float lux = lightMeter.readLightLevel();
   if (lux < 0) {
-    // Error de lectura: imprimir una sola vez y desactivar
     if (!bh1750_error_logged) {
       Serial.println("[BH1750] Error de lectura. Desactivando luxometro.");
       bh1750_error_logged = true;
