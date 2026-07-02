@@ -1,33 +1,29 @@
 /*
- * ESP32 - Firmware Hibrido con Tolerancia a Fallos
- * Arquitectura: MQTT (Mosquitto RPi) + Firebase (Nube)
+ * ESP32 - Firmware MQTT-Only
+ * Arquitectura: Publica TODOS los sensores via MQTT local a la RPi.
+ * La RPi se encarga de subir los datos a Firebase.
+ * Sin Firebase directo, sin actuadores locales.
+ *
  * Sensores: PIR, Infrarrojo (aforo), Magnetico (puerta), RFID
- * Sin actuadores - solo telemetria
  */
 
-#include <HTTPClient.h>
 #include <MFRC522.h>
 #include <PubSubClient.h>
 #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
-#include <WiFiClientSecure.h>
 
 // === RED ===
 const char *WIFI_SSID = "ESP32_MQTT_AP";
 const char *WIFI_PASSWORD = "taipt_iot_2026";
 
-// === MQTT (Raspberry Pi) ===
+// === MQTT (Raspberry Pi - broker local) ===
 const char *MQTT_BROKER = "10.42.0.1";
 const int MQTT_PORT = 1883;
 const char *TOPIC_PIR = "movimiento_pir";
 const char *TOPIC_AFORO = "aforo";
 const char *TOPIC_PUERTA = "puerta_fisica/estado";
 const char *TOPIC_RFID = "accesos";
-
-// === Firebase (Nube - REST API directa) ===
-const char *FIREBASE_HOST = "aula-4587b-default-rtdb.firebaseio.com";
-const int FIREBASE_PORT = 443;
 
 // === Pines ===
 const int PIN_IR1 = 34;
@@ -43,6 +39,7 @@ const unsigned long DEBOUNCE_CRUCE = 2000;
 const unsigned long INTERVALO_PIR = 5000;
 const unsigned long INTERVALO_PUERTA = 1000;
 const unsigned long INTERVALO_RECONEXION = 30000;
+const unsigned long INTERVALO_RECONEXION_WIFI = 30000;
 
 // === Estado global ===
 MFRC522 rfid(SS_PIN, RST_PIN);
@@ -59,7 +56,6 @@ int ultimo_estado_puerta = -1;
 unsigned long ultimo_tiempo_puerta = 0;
 unsigned long ultimo_intento_mqtt = 0;
 unsigned long ultimo_intento_wifi = 0;
-const unsigned long INTERVALO_RECONEXION_WIFI = 30000;
 
 // ============================================================
 //  SETUP
@@ -67,7 +63,7 @@ const unsigned long INTERVALO_RECONEXION_WIFI = 30000;
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n=== ESP32 Hibrido: MQTT + Firebase ===\n");
+  Serial.println("\n=== ESP32 MQTT-Only (RPi handles Firebase) ===\n");
 
   pinMode(PIN_IR1, INPUT);
   pinMode(PIN_IR2, INPUT);
@@ -149,7 +145,7 @@ void verificarWiFi() {
 }
 
 // ============================================================
-//  MQTT - NO BLOQUEANTE
+//  MQTT - CONEXION
 // ============================================================
 void intentarConexionMQTT() {
   if (mqttClient.connected() || WiFi.status() != WL_CONNECTED)
@@ -162,64 +158,23 @@ void intentarConexionMQTT() {
     Serial.print(" FALLO rc=");
     Serial.println(mqttClient.state());
   }
-  // Sin bucle while - si falla, continuamos
 }
 
 // ============================================================
-//  DESPACHADOR DUAL: MQTT + FIREBASE
+//  MQTT: PUBLICAR DATO (solo MQTT, sin Firebase)
 // ============================================================
-void enviarDato(String topic, String ruta, String valor) {
-  Serial.println("[DATO] " + topic + " = " + valor);
-
-  // MQTT (si conectado)
+void enviarMQTT(String topic, String valor) {
+  Serial.println("[MQTT] " + topic + " = " + valor);
   if (mqttClient.connected()) {
     mqttClient.publish(topic.c_str(), valor.c_str());
     Serial.println("  -> [MQTT] OK");
-  }
-
-  // Firebase (si hay WiFi)
-  if (WiFi.status() == WL_CONNECTED) {
-    enviarAFirebase(ruta, valor);
-  }
-}
-
-void enviarDatoInt(String topic, String ruta, int valor) {
-  enviarDato(topic, ruta, String(valor));
-}
-
-void enviarAFirebase(String ruta, String valor) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("  -> [Firebase] OMITIDO (sin WiFi)");
-    return;
-  }
-
-  WiFiClientSecure secureClient;
-  secureClient.setInsecure(); // Saltar verificacion de certificado SSL
-
-  // Construir URI limpia: /monitoreo/pir.json
-  String uri = ruta + ".json";
-  Serial.print("  -> [Firebase] PUT ");
-  Serial.print(FIREBASE_HOST);
-  Serial.println(uri);
-
-  // Conectar directamente al host en puerto 443 (HTTPS)
-  HTTPClient http;
-  // begin(client, host, port, uri, https)
-  http.begin(secureClient, FIREBASE_HOST, 443, uri.c_str(), true);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(8000);
-
-  String body =
-      (valor.toInt() != 0 || valor == "0") ? valor : ("\"" + valor + "\"");
-
-  int code = http.PUT(body);
-  if (code > 0) {
-    Serial.println("  -> [Firebase] OK (" + String(code) + ")");
   } else {
-    Serial.println("  -> [Firebase] ERROR " + String(code) + ": " +
-                   http.errorToString(code));
+    Serial.println("  -> [MQTT] SKIP (no conectado)");
   }
-  http.end();
+}
+
+void enviarMQTTInt(String topic, int valor) {
+  enviarMQTT(topic, String(valor));
 }
 
 // ============================================================
@@ -231,23 +186,17 @@ void procesarPIR() {
   int puerta = digitalRead(PIN_MAGNETICO);
   bool puertaCerrada = (puerta == LOW);
 
-  // REGLA DE NEGOCIO: El PIR SOLO evalua movimiento si:
-  //   1. La puerta esta CERRADA
-  //   2. El contador de aforo es EXACTAMENTE 0
-  // Si hay personas dentro o la puerta esta abierta, el movimiento es legitimo
   if (!puertaCerrada || contadorAforo > 0) {
-    // Ignorar completamente el PIR - resetear estado sin enviar telemetria
     last_pir_state = LOW;
     return;
   }
 
-  // Solo aqui evaluamos el PIR (puerta cerrada + aforo = 0)
   if (pir && !last_pir_state && now - last_pir_post > INTERVALO_PIR) {
-    enviarDato(TOPIC_PIR, "/movimiento_pir", "true");
+    enviarMQTT(TOPIC_PIR, "true");
     last_pir_post = now;
   }
   if (!pir && last_pir_state && now - last_pir_post > 2000) {
-    enviarDato(TOPIC_PIR, "/movimiento_pir", "false");
+    enviarMQTT(TOPIC_PIR, "false");
   }
   last_pir_state = pir;
 }
@@ -271,23 +220,21 @@ void procesarFlujo() {
   if (ir2 == LOW && last_IR2 == HIGH)
     time_IR2_triggered = now;
 
-  // INGRESO: IR1 -> IR2
   if (time_IR1_triggered > 0 && time_IR2_triggered > time_IR1_triggered) {
     if (time_IR2_triggered - time_IR1_triggered < TIMEOUT_FLUJO) {
       contadorAforo++;
-      enviarDatoInt(TOPIC_AFORO, "/aforo", contadorAforo);
+      enviarMQTTInt(TOPIC_AFORO, contadorAforo);
       last_cruce_time = now;
     }
     time_IR1_triggered = 0;
     time_IR2_triggered = 0;
-  }
-  // SALIDA: IR2 -> IR1
-  else if (time_IR2_triggered > 0 && time_IR1_triggered > time_IR2_triggered) {
+  } else if (time_IR2_triggered > 0 &&
+             time_IR1_triggered > time_IR2_triggered) {
     if (time_IR1_triggered - time_IR2_triggered < TIMEOUT_FLUJO) {
       contadorAforo--;
       if (contadorAforo < 0)
         contadorAforo = 0;
-      enviarDatoInt(TOPIC_AFORO, "/aforo", contadorAforo);
+      enviarMQTTInt(TOPIC_AFORO, contadorAforo);
       last_cruce_time = now;
     }
     time_IR1_triggered = 0;
@@ -313,8 +260,7 @@ void procesarPuerta() {
 
   int estado = digitalRead(PIN_MAGNETICO);
   if (estado != ultimo_estado_puerta) {
-    enviarDato(TOPIC_PUERTA, "/puerta_fisica/estado",
-               estado == LOW ? "CERRADA" : "ABIERTA");
+    enviarMQTT(TOPIC_PUERTA, estado == LOW ? "0" : "1");
     ultimo_estado_puerta = estado;
   }
   ultimo_tiempo_puerta = now;
@@ -334,6 +280,6 @@ void procesarRFID() {
     uid += String(rfid.uid.uidByte[i], HEX);
   }
   uid.toUpperCase();
-  enviarDato(TOPIC_RFID, "/accesos", uid);
+  enviarMQTT(TOPIC_RFID, uid);
   rfid.PICC_HaltA();
 }

@@ -292,17 +292,17 @@ function verificarIntrusion() {
     }
 }
 
-// Sensor PIR
-onValue(ref(companionDb || db, 'movimiento_pir'), (snapshot) => {
+// Sensor PIR (leer de NUESTRA DB - complexivo-fv, ruta monitoreo)
+onValue(ref(db, 'monitoreo/movimiento_pir'), (snapshot) => {
     const val = snapshot.val();
     currentPirState = (val === true || val === "true" || val === "Movimiento Detectado" || val === 1 || val === "1");
     verificarIntrusion();
 });
 
-// Sensor Puerta (Cerrojo Eléctrico / Estado de la Puerta)
-onValue(ref(companionDb || db, 'puerta_fisica/estado'), (snapshot) => {
+// Sensor Puerta (leer de NUESTRA DB - complexivo-fv, path /monitoreo/puerta como booleano)
+onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
     const val = snapshot.val();
-    const isOpen = (val === true || val === "true" || val === "ABIERTA" || val === "abierta" || val === 1 || val === "1");
+    const isOpen = (val === true || val === 1);
     currentPuertaState = isOpen ? 'ABIERTA' : 'CERRADA';
 
     estadoChapa.innerText = currentPuertaState;
@@ -320,8 +320,8 @@ onValue(ref(companionDb || db, 'puerta_fisica/estado'), (snapshot) => {
     verificarIntrusion();
 });
 
-// Sensor Infrarrojo (Cantidad de Personas / Aforo)
-onValue(ref(companionDb || db, 'aforo'), (snapshot) => {
+// Sensor Infrarrojo (Cantidad de Personas / Aforo - NUESTRA DB, ruta monitoreo)
+onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     countPersonas.innerText = personas;
@@ -434,8 +434,8 @@ onValue(ref(companionDb || db, 'accesos'), (snapshot) => {
     }
 });
 
-// --- FIREBASE: GESTIÓN DE USUARIOS RFID ---
-onValue(ref(companionDb || db, 'usuarios'), (snapshot) => {
+// --- FIREBASE: GESTIÓN DE USUARIOS RFID (NUESTRA DB) ---
+onValue(ref(db, 'usuarios'), (snapshot) => {
     listaUsuarios.innerHTML = '';
     const data = snapshot.val();
     if (data) {
@@ -1708,8 +1708,8 @@ function actualizarGaugeAforo(personas) {
     aforoEstado.style.borderColor = estadoBorder;
 }
 
-// Hook gauge into aforo sensor
-onValue(ref(companionDb || db, 'aforo'), (snapshot) => {
+// Hook gauge into aforo sensor (NUESTRA DB, ruta monitoreo)
+onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     actualizarGaugeAforo(personas);
@@ -1873,7 +1873,7 @@ if (btnToggleFoco) {
 if (btnResetAlarma) {
     btnResetAlarma.addEventListener('click', async () => {
         try {
-            await set(ref(db, 'movimiento_pir'), false);
+            await set(ref(db, 'monitoreo/movimiento_pir'), false);
             detenerAlertaCritica();
             crearToast('Alarma PIR reseteada', 'success');
             await registrarAuditoria('Reset Alarma', 'Alarma PIR reseteada manualmente');
@@ -1886,7 +1886,7 @@ if (btnResetAlarma) {
 
 // Show alarm reset button when PIR is active
 if (btnResetAlarma) {
-    onValue(ref(db, 'movimiento_pir'), (snapshot) => {
+    onValue(ref(db, 'monitoreo/movimiento_pir'), (snapshot) => {
         const val = snapshot.val();
         const active = (val === true || val === 'true' || val === 1 || val === '1');
         btnResetAlarma.style.display = active ? 'block' : 'none';

@@ -8,6 +8,8 @@ services:
     container_name: backend-control
     restart: unless-stopped
     privileged: true
+    environment:
+      - DOCKER_CONTAINER=1
     devices:
       - "/dev/gpiomem:/dev/gpiomem"
       - "/dev/mem:/dev/mem"

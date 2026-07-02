@@ -3,9 +3,16 @@ import datetime
 import threading
 import os
 import subprocess
+import json
 from flask import Flask, request, jsonify
 import firebase_admin
 from firebase_admin import credentials, db
+try:
+    import paho.mqtt.client as mqtt
+    MQTT_AVAILABLE = True
+except ImportError:
+    MQTT_AVAILABLE = False
+    print("[MOCK] paho-mqtt no encontrado. Control de foco via MQTT deshabilitado.")
 try:
     import RPi.GPIO as GPIO
 except ImportError:
@@ -725,11 +732,228 @@ def reboot_raspberry():
         print(f"[ERROR REBOOT] {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# --- TUYA CLOUD API: Control del Interruptor Inteligente ---
+TUYA_ACCESS_ID = "4cg753npk9gxtjwnqr7y"
+TUYA_ACCESS_SECRET = "a5e813311035455eab6f92a8d7786ca0"
+TUYA_DEVICE_ID = "eb98686bb984169ea7dgfq"
+TUYA_ENDPOINT = "https://openapi.tuyaus.com"
+
+tuya_api = None
+
+def inicializar_tuya():
+    """Inicializa la conexion con Tuya Cloud API."""
+    global tuya_api
+    try:
+        from tuya_connector import TuyaOpenAPI
+        tuya_api = TuyaOpenAPI(TUYA_ENDPOINT, TUYA_ACCESS_ID, TUYA_ACCESS_SECRET)
+        tuya_api.connect()
+        print("[Tuya] Conectado a Tuya Cloud API")
+
+        # === DIAGNOSTICO: Consultar especificaciones y estado del dispositivo ===
+        print("[Tuya] === DIAGNOSTICO DEL DISPOSITIVO ===")
+
+        # 1. Consultar info basica del dispositivo
+        info = tuya_api.get(f"/v1.0/devices/{TUYA_DEVICE_ID}")
+        print(f"[Tuya] Device Info: {json.dumps(info, indent=2, default=str)}")
+
+        # 2. Consultar estado actual (codigos de funcion disponibles)
+        status = tuya_api.get(f"/v1.0/devices/{TUYA_DEVICE_ID}/status")
+        print(f"[Tuya] Device Status: {json.dumps(status, indent=2, default=str)}")
+
+        # 3. Consultar especificaciones del producto
+        specs = tuya_api.get(f"/v1.0/devices/{TUYA_DEVICE_ID}/specification")
+        print(f"[Tuya] Device Spec: {json.dumps(specs, indent=2, default=str)}")
+
+        print("[Tuya] === FIN DIAGNOSTICO ===")
+
+    except ImportError:
+        print("[Tuya] tuya-connector-python no instalado. Control de foco deshabilitado.")
+    except Exception as e:
+        print(f"[Tuya Error] No se pudo conectar: {e}")
+        tuya_api = None
+
+def tuya_toggle_foco(encender):
+    """Envia comando al interruptor inteligente Tuya para encender/apagar."""
+    global tuya_api
+    if tuya_api is None:
+        print("[Tuya] API no inicializada. Reintentando...")
+        inicializar_tuya()
+    if tuya_api is None:
+        print("[Tuya] No se pudo conectar. Comando ignorado.")
+        return False
+
+    estado_str = "ENCENDIDO" if encender else "APAGADO"
+
+    # Probar multiples codigos de comando (varian segun modelo de interruptor)
+    codigos_a_probar = ["switch_1", "switch", "master_switch"]
+
+    for codigo in codigos_a_probar:
+        try:
+            commands = {"commands": [{"code": codigo, "value": encender}]}
+            print(f"[Tuya] Intentando '{codigo}' = {encender} ...")
+            response = tuya_api.post(f"/v1.0/devices/{TUYA_DEVICE_ID}/commands", commands)
+            print(f"[Tuya] Respuesta '{codigo}': {json.dumps(response, default=str)}")
+
+            if response.get("success"):
+                print(f"[Tuya] EXITO: Interruptor -> {estado_str} (codigo: {codigo})")
+                return True
+            else:
+                print(f"[Tuya] '{codigo}' fallo, probando siguiente...")
+
+        except Exception as e:
+            print(f"[Tuya Error] '{codigo}': {e}")
+            continue
+
+    # Si ninguno funciono, reiniciar conexion
+    print("[Tuya] Todos los codigos fallaron. Reiniciando conexion...")
+    tuya_api = None
+    return False
+
+# --- FIREBASE LISTENER: estado_foco → Tuya API ---
+def firebase_foco_listener():
+    """Escucha cambios en /estado_foco de Firebase y activa el interruptor Tuya."""
+    print("[FOCO-LISTENER] Iniciando escucha de estado_foco en Firebase...")
+    inicializar_tuya()
+    last_value = None
+
+    def callback(event):
+        nonlocal last_value
+        try:
+            nuevo_estado = event.data
+            if isinstance(nuevo_estado, str) and nuevo_estado != last_value:
+                last_value = nuevo_estado
+                val_upper = nuevo_estado.strip().upper()
+                encender = val_upper in ("ENCENDIDO", "ON", "TRUE", "1")
+                print(f"[FOCO-LISTENER] Firebase cambio: {nuevo_estado} -> Tuya {'ON' if encender else 'OFF'}")
+                tuya_toggle_foco(encender)
+        except Exception as e:
+            print(f"[FOCO-LISTENER Error] {e}")
+
+    try:
+        ref = db.reference('estado_foco')
+        ref.listen(callback)
+    except Exception as e:
+        print(f"[FOCO-LISTENER Error] No se pudo escuchar Firebase: {e}")
+
+# --- MQTT SUBSCRIBER: Relay ESP32 → Firebase ---
+# El ESP32 publica sus sensores via MQTT local. Este hilo los recibe
+# y los sube a las bases de datos Firebase correspondientes.
+def mqtt_sensor_relay():
+    """Se suscribe a los topics MQTT del ESP32 y retransmite a Firebase."""
+    if not MQTT_AVAILABLE:
+        print("[MQTT-RELAY] paho-mqtt no disponible. Relay deshabilitado.")
+        return
+
+    def on_connect(client, userdata, flags, rc, properties=None):
+        print(f"[MQTT-RELAY] Conectado al broker (rc={rc})")
+        client.subscribe("movimiento_pir")
+        client.subscribe("aforo")
+        client.subscribe("puerta_fisica/estado")
+        client.subscribe("accesos")
+        print("[MQTT-RELAY] Suscrito a: movimiento_pir, aforo, puerta_fisica/estado, accesos")
+
+    def on_message(client, userdata, msg):
+        topic = msg.topic
+        payload = msg.payload.decode('utf-8').strip()
+        print(f"[MQTT-RELAY] Recibido: {topic} = {payload}")
+
+        try:
+            if topic == "movimiento_pir":
+                # PIR → NUESTRA DB (complexivo-fv) en /monitoreo/movimiento_pir
+                val = payload.lower() in ("true", "1")
+                db.reference('monitoreo/movimiento_pir').set(val)
+                print(f"  -> [Firebase OUR] /monitoreo/movimiento_pir = {val}")
+
+            elif topic == "aforo":
+                # Aforo → NUESTRA DB (complexivo-fv) en /monitoreo/aforo
+                val = int(payload) if payload.isdigit() else 0
+                db.reference('monitoreo/aforo').set(val)
+                print(f"  -> [Firebase OUR] /monitoreo/aforo = {val}")
+
+            elif topic == "puerta_fisica/estado":
+                # Convertir a booleano: "1" o "true" → True, "0" o "false" → False
+                puerta_abierta = payload.lower() in ("1", "true", "abierta")
+
+                # NUESTRA DB (complexivo-fv): /monitoreo/puerta como BOOLEANO
+                db.reference('monitoreo/puerta').set(puerta_abierta)
+                print(f"  -> [Firebase OUR] /monitoreo/puerta = {puerta_abierta}")
+
+                # COMPANION DB (new-conexion): /puerta_fisica/estado como STRING
+                if staging_app:
+                    from firebase_admin import db as _db
+                    estado_str = "ABIERTA" if puerta_abierta else "CERRADA"
+                    _db.reference('puerta_fisica/estado', app=staging_app).set(estado_str)
+                print(f"  -> [Firebase COMPANION] /puerta_fisica/estado = {'ABIERTA' if puerta_abierta else 'CERRADA'}")
+
+            elif topic == "accesos":
+                # RFID UID → Validar contra /usuarios y registrar en /accesos de staging
+                ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                uid = payload
+
+                # Buscar usuario en NUESTRA DB (complexivo-fv) donde están los usuarios
+                usuario = db.reference(f'usuarios/{uid}').get()
+
+                if usuario:
+                    nombre = usuario.get('nombre', 'Desconocido')
+                    rol = usuario.get('rol', 'Sin rol')
+                    print(f"  -> [RFID] Autorizado: {nombre} ({rol})")
+
+                    # Registrar en staging (new-conexion) /accesos
+                    if staging_app:
+                        from firebase_admin import db as _db
+                        _db.reference('accesos', app=staging_app).push({
+                            "uid": uid,
+                            "docente": nombre,
+                            "rol": rol,
+                            "metodo": "RFID",
+                            "fecha_hora": ahora_str,
+                            "exitoso": True
+                        })
+                    print(f"  -> [Firebase COMPANION] /accesos += {nombre}")
+                else:
+                    print(f"  -> [RFID] UID NO registrado: {uid}")
+                    # Registrar intento fallido en staging
+                    if staging_app:
+                        from firebase_admin import db as _db
+                        _db.reference('accesos', app=staging_app).push({
+                            "uid": uid,
+                            "metodo": "RFID",
+                            "fecha_hora": ahora_str,
+                            "exitoso": False
+                        })
+                    # Notificar al dashboard del UID no registrado
+                    db.reference('ultimo_uid_no_registrado').set(uid)
+
+        except Exception as e:
+            print(f"[MQTT-RELAY Error] {topic}: {e}")
+
+    try:
+        relay_client = mqtt.Client(client_id="rpi-sensor-relay",
+                                   callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        relay_client.on_connect = on_connect
+        relay_client.on_message = on_message
+        # En Docker, usar nombre del contenedor; fuera de Docker, usar localhost
+        mqtt_host = "mosquitto" if os.environ.get("DOCKER_CONTAINER") else "127.0.0.1"
+        relay_client.connect(mqtt_host, 1883, 60)
+        print(f"[MQTT-RELAY] Conectado a broker MQTT en {mqtt_host}:1883")
+        print("[MQTT-RELAY] Iniciando loop de relay MQTT → Firebase...")
+        relay_client.loop_forever()
+    except Exception as e:
+        print(f"[MQTT-RELAY Error] No se pudo conectar: {e}")
+
 def main():
     try:
         # Iniciar hilo RFID
         t_rfid = threading.Thread(target=rfid_loop, daemon=True)
         t_rfid.start()
+
+        # Iniciar hilo relay MQTT → Firebase (ESP32 sensors → nube)
+        t_relay = threading.Thread(target=mqtt_sensor_relay, daemon=True)
+        t_relay.start()
+
+        # Iniciar hilo listener foco Firebase → Tuya API
+        t_foco = threading.Thread(target=firebase_foco_listener, daemon=True)
+        t_foco.start()
         
         # Iniciar Flask (host=0.0.0.0 permite conexiones externas desde la red local)
         print("[FLASK] Iniciando servidor en puerto 5000...")
