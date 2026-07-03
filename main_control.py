@@ -66,48 +66,20 @@ except Exception as e:
             return None, None
     reader = MockRFIDFallback()
 
-# --- CONFIGURACIÓN FIREBASE (DUAL DATABASE) ---
-# DB principal (complexivo-fv): hardware (aforo, PIR, foco, inventario)
-# DB staging (new-conexion): puerta_fisica, accesos, codigos_unico (espejo del compañero)
+# --- CONFIGURACIÓN FIREBASE (ÚNICA DB) ---
+# TODOS los datos van a complexivo-fv. No existe staging/new-conexion.
 
 OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/"
-STAGING_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/"
 
 try:
     cred = credentials.Certificate('google-services.json')
-    # App principal (nombres por defecto)
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred, {
             'databaseURL': OUR_DB_URL
         })
-    print(f"[Firebase] DB principal conectada: {OUR_DB_URL}")
+    print(f"[Firebase] Conectado a: {OUR_DB_URL}")
 except Exception as e:
-    print(f"[ERROR Firebase principal] Verifica google-services.json: {e}")
-
-# App secundaria para staging (necesita nombre único)
-staging_app = None
-try:
-    staging_app = firebase_admin.initialize_app(
-        cred,
-        {'databaseURL': STAGING_DB_URL},
-        name='staging'
-    )
-    print(f"[Firebase] DB staging conectada: {STAGING_DB_URL}")
-except Exception as e:
-    print(f"[Firebase] DB staging no disponible (se omite): {e}")
-    staging_app = None
-
-# --- HELPERS DUAL-DATABASE ---
-def db_primary():
-    """Retorna referencia a la base de datos principal (complexivo-fv)."""
-    return db
-
-def db_staging():
-    """Retorna referencia a la base de datos staging (new-conexion). Si no está disponible, usa la principal."""
-    if staging_app:
-        from firebase_admin import db as _db
-        return _db.reference('', app=staging_app)
-    return db
+    print(f"[ERROR Firebase] Verifica google-services.json: {e}")
 
 # --- VARIABLES GLOBALES ---
 estado_actual = {
@@ -156,33 +128,6 @@ def actualizar_monitoreo(datos):
         ref.update(datos)
     except Exception as e:
         print(f"[Error Firebase] {e}")
-
-def actualizar_staging(path, datos):
-    """Escribe datos en la base de datos staging (new-conexion)."""
-    try:
-        if staging_app:
-            from firebase_admin import db as _db
-            ref = _db.reference(path, app=staging_app)
-            ref.update(datos)
-            print(f"[Staging] {path} actualizado")
-        else:
-            # Fallback: escribir en DB principal si staging no está disponible
-            db.reference(path).update(datos)
-    except Exception as e:
-        print(f"[Error Staging] {e}")
-
-def push_staging(path, datos):
-    """Push un nodo hijo en la base de datos staging (new-conexion)."""
-    try:
-        if staging_app:
-            from firebase_admin import db as _db
-            ref = _db.reference(path, app=staging_app)
-            ref.push(datos)
-            print(f"[Staging] push en {path}")
-        else:
-            db.reference(path).push(datos)
-    except Exception as e:
-        print(f"[Error Staging push] {e}")
 
 # Sincronizar estado inicial
 actualizar_monitoreo({
@@ -244,21 +189,6 @@ def registrar_acceso_docente(uid):
                 "saca_producto": False,
                 "producto_extraido_id": ""
             })
-            # Espejo en staging (new-conexion)
-            push_staging("accesos", {
-                "docente": nombre,
-                "rol": rol,
-                "metodo": "RFID",
-                "metodo_acceso": "rfid",
-                "codigo_usado": uid,
-                "fecha_hora": ahora_str,
-                "hora_ingreso": estado_actual["hora_ingreso_encargado"],
-                "hora_salida": ahora_str,
-                "tiempo_permanencia_min": minutos,
-                "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
-                "exitoso": True
-            })
-            
             # Resetear estado
             estado_actual["docente_encargado_uid"] = None
             estado_actual["hora_ingreso_encargado"] = None
@@ -347,9 +277,6 @@ def recibir_sensores():
         estado = data.get("estado", "CERRADA")  # "ABIERTA" o "CERRADA"
         estado_actual["estado_chapa"] = estado
         actualizar_monitoreo({"estado_chapa": estado})
-        # Espejo en staging (new-conexion)
-        actualizar_staging("puerta_fisica", {"estado": estado, "ultimo_cambio": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
-        actualizar_staging("puerta", {"estado": estado, "ultimo_cambio": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         print(f"[PUERTA] Estado del sensor magnético: {estado}")
         
     elif evento == "rfid_leido":
@@ -596,18 +523,6 @@ def acceso_teclado():
         "saca_producto": False,
         "producto_extraido_id": ""
     })
-    # Espejo en staging (new-conexion)
-    push_staging("accesos", {
-        "docente": nombre,
-        "metodo": "CODIGO",
-        "metodo_acceso": "teclado",
-        "codigo_usado": codigo,
-        "fecha_hora": ahora_str,
-        "hora_ingreso": ahora_str,
-        "hora_salida": None,
-        "exitoso": True
-    })
-    
     # Abrir la puerta
     threading.Thread(target=abrir_chapa).start()
     
@@ -835,10 +750,14 @@ def firebase_foco_listener():
     except Exception as e:
         print(f"[FOCO-LISTENER Error] No se pudo escuchar Firebase: {e}")
 
+# --- MQTT PUBLISHER (para enviar comandos al ESP32/interruptor) ---
+mqtt_pub_client = None
+
 # --- MQTT SUBSCRIBER: Relay ESP32 → Firebase ---
 # El ESP32 publica sus sensores via MQTT local. Este hilo los recibe
 # y los sube a las bases de datos Firebase correspondientes.
 def mqtt_sensor_relay():
+    global mqtt_pub_client
     """Se suscribe a los topics MQTT del ESP32 y retransmite a Firebase."""
     if not MQTT_AVAILABLE:
         print("[MQTT-RELAY] paho-mqtt no disponible. Relay deshabilitado.")
@@ -850,7 +769,8 @@ def mqtt_sensor_relay():
         client.subscribe("aforo")
         client.subscribe("puerta_fisica/estado")
         client.subscribe("accesos")
-        print("[MQTT-RELAY] Suscrito a: movimiento_pir, aforo, puerta_fisica/estado, accesos")
+        client.subscribe("aula/luminosidad")
+        print("[MQTT-RELAY] Suscrito a: movimiento_pir, aforo, puerta_fisica/estado, accesos, aula/luminosidad")
 
     def on_message(client, userdata, msg):
         topic = msg.topic
@@ -888,12 +808,7 @@ def mqtt_sensor_relay():
                 db.reference('monitoreo/estado_puerta').set(estado_puerta_str)
                 print(f"  -> [Firebase OUR] /monitoreo/puerta = {puerta_abierta}, /monitoreo/estado_puerta = {estado_puerta_str}")
 
-                # COMPANION DB (new-conexion): /puerta_fisica/estado como STRING
-                if staging_app:
-                    from firebase_admin import db as _db
-                    estado_str = "ABIERTA" if puerta_abierta else "CERRADA"
-                    _db.reference('puerta_fisica/estado', app=staging_app).set(estado_str)
-                print(f"  -> [Firebase COMPANION] /puerta_fisica/estado = {'ABIERTA' if puerta_abierta else 'CERRADA'}")
+                print(f"  -> [Firebase] /monitoreo/estado_puerta = {estado_puerta_str}")
 
             elif topic == "accesos":
                 # RFID UID → Validar contra /usuarios y registrar en /accesos de staging
@@ -908,31 +823,45 @@ def mqtt_sensor_relay():
                     rol = usuario.get('rol', 'Sin rol')
                     print(f"  -> [RFID] Autorizado: {nombre} ({rol})")
 
-                    # Registrar en staging (new-conexion) /accesos
-                    if staging_app:
-                        from firebase_admin import db as _db
-                        _db.reference('accesos', app=staging_app).push({
-                            "uid": uid,
-                            "docente": nombre,
-                            "rol": rol,
-                            "metodo": "RFID",
-                            "fecha_hora": ahora_str,
-                            "exitoso": True
-                        })
-                    print(f"  -> [Firebase COMPANION] /accesos += {nombre}")
+                    print(f"  -> [Firebase] /accesos += {nombre}")
                 else:
-                    print(f"  -> [RFID] UID NO registrado: {uid}")
-                    # Registrar intento fallido en staging
-                    if staging_app:
-                        from firebase_admin import db as _db
-                        _db.reference('accesos', app=staging_app).push({
-                            "uid": uid,
-                            "metodo": "RFID",
-                            "fecha_hora": ahora_str,
-                            "exitoso": False
-                        })
-                    # Notificar al dashboard del UID no registrado
-                    db.reference('ultimo_uid_no_registrado').set(uid)
+                    print(f"  -> [RFID] UID NO registrado: {uid} (ignorado)")
+
+            elif topic == "aula/luminosidad":
+                # Soft-automatización de luces: comparar con umbral
+                try:
+                    lux_actual = float(payload.strip())
+                except (ValueError, TypeError):
+                    print(f"[LUZ] Payload inválido: '{payload}'")
+                    return
+                
+                # Leer umbral desde Firebase (default 70)
+                umbral = 70
+                try:
+                    raw_umbral = db.reference('configuracion/umbral_luxes').get()
+                    if raw_umbral is not None:
+                        umbral = float(raw_umbral)
+                        if umbral <= 0:
+                            umbral = 70
+                except Exception:
+                    pass
+                
+                # Guardar lectura actual en Firebase
+                db.reference('monitoreo/lux_actual').set(round(lux_actual, 1))
+                
+                # Evaluar y actuar
+                if lux_actual < umbral:
+                    # POCA LUZ → Encender lámparas
+                    db.reference('monitoreo/estado_luces').set(1)
+                    if mqtt_pub_client and mqtt_pub_client.is_connected():
+                        mqtt_pub_client.publish("aula/interruptor", "1")
+                    print(f"[AUTOMATIZACIÓN] Poca luz detectada ({lux_actual} lux < {umbral} umbral). Enviando comando ENCENDER (1) a aula/interruptor")
+                else:
+                    # SUFICIENTE LUZ → Apagar lámparas
+                    db.reference('monitoreo/estado_luces').set(0)
+                    if mqtt_pub_client and mqtt_pub_client.is_connected():
+                        mqtt_pub_client.publish("aula/interruptor", "0")
+                    print(f"[AUTOMATIZACIÓN] Luz suficiente ({lux_actual} lux >= {umbral} umbral). Enviando comando APAGAR (0) a aula/interruptor")
 
         except Exception as e:
             print(f"[MQTT-RELAY Error] {topic}: {e}")
@@ -945,6 +874,8 @@ def mqtt_sensor_relay():
         # En Docker, usar nombre del contenedor; fuera de Docker, usar localhost
         mqtt_host = "mosquitto" if os.environ.get("DOCKER_CONTAINER") else "127.0.0.1"
         relay_client.connect(mqtt_host, 1883, 60)
+        # Asignar al cliente global para que la automatización de luces pueda publicar
+        mqtt_pub_client = relay_client
         print(f"[MQTT-RELAY] Conectado a broker MQTT en {mqtt_host}:1883")
         print("[MQTT-RELAY] Iniciando loop de relay MQTT → Firebase...")
         relay_client.loop_forever()

@@ -7,15 +7,8 @@ const OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/";
 const ourApp = initializeApp({ databaseURL: OUR_DB_URL }, 'ours');
 const db = getDatabase(ourApp);
 
-// === STAGING database (new-conexion) - READ ONLY for hardware ===
-const COMPANION_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/";
-let companionDb = null;
-try {
-    const companionApp = initializeApp({ databaseURL: COMPANION_DB_URL }, 'companion');
-    companionDb = getDatabase(companionApp);
-} catch (e) {
-    console.warn('[DB] Companion DB init:', e.message);
-}
+// === Sin base de datos externa - TODO va a complexivo-fv ===
+const companionDb = null;
 
 
 // --- SHA-256 HASH HELPER ---
@@ -329,6 +322,46 @@ onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
     const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     updateChart(timeStr, personas);
 });
+
+// --- FIREBASE: UMBRAL DE LUZ (Soft-Automatización) ---
+onValue(ref(db, 'configuracion/umbral_luxes'), (snapshot) => {
+    const val = snapshot.val();
+    const umbral = (val && val > 0) ? val : 500;
+    const slider = document.getElementById('umbralLuxSlider');
+    const label = document.getElementById('umbralLuxLabel');
+    if (slider) slider.value = umbral;
+    if (label) label.innerText = umbral + ' lux';
+});
+
+onValue(ref(db, 'monitoreo/lux_actual'), (snapshot) => {
+    const val = snapshot.val();
+    const el = document.getElementById('luxActual');
+    if (el) el.innerText = (val !== null && val !== undefined) ? val + ' lux' : '--';
+});
+
+onValue(ref(db, 'monitoreo/estado_luces'), (snapshot) => {
+    const val = snapshot.val();
+    const el = document.getElementById('estadoLucesAuto');
+    if (el) {
+        if (val === 1) {
+            el.innerHTML = '<span class="badge badge-green">Encendido (auto)</span>';
+        } else {
+            el.innerHTML = '<span class="badge" style="background:rgba(148,163,184,0.15);color:var(--text-muted);border:1px solid rgba(148,163,184,0.3);">Apagado (auto)</span>';
+        }
+    }
+});
+
+// Guardar umbral desde slider
+const umbralSlider = document.getElementById('umbralLuxSlider');
+if (umbralSlider) {
+    umbralSlider.addEventListener('change', async (e) => {
+        const val = parseInt(e.target.value);
+        if (val > 0) {
+            await set(ref(db, 'configuracion/umbral_luxes'), val);
+            crearToast('Umbral de luz actualizado a ' + val + ' lux', 'success');
+        }
+    });
+}
 
 // --- FIREBASE: CONTROL FOCO INTELIGENTE MERCURY ---
 onValue(ref(db, 'estado_foco'), (snapshot) => {

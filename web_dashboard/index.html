@@ -216,6 +216,33 @@
                     </button>
                 </div>
 
+                <!-- Control de Umbral de Luz (Soft-Automatización) -->
+                <div class="glass-panel" style="padding: 20px; margin-bottom: 25px;">
+                    <h3 style="font-size: 1rem; margin-bottom: 10px;">💡 Automatización de Luces (BH1750)</h3>
+                    <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">Umbral de Luxes</label>
+                            <input type="range" id="umbralLuxSlider" min="0" max="1000" step="5" value="70"
+                                style="width: 100%; margin-top: 5px;">
+                            <span id="umbralLuxLabel" style="font-size: 0.9rem; font-weight: 600;">500 lux</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <p style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Luz
+                                Actual</p>
+                            <p id="luxActual" style="font-size: 1.4rem; font-weight: 800; color: var(--primary);">--</p>
+                        </div>
+                        <div style="text-align: center;">
+                            <p style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Estado
+                                Luces</p>
+                            <div id="estadoLucesAuto"><span class="badge"
+                                    style="background:rgba(148,163,184,0.15);color:var(--text-muted);border:1px solid rgba(148,163,184,0.3);">--</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">Si la luz ambiental baja
+                        del umbral, las luces se encienden automáticamente. Modifica el valor con el slider.</p>
+                </div>
+
                 <!-- Gauge de Aforo -->
                 <div class="chart-container glass-panel" style="margin-bottom: 25px;">
                     <div class="chart-header">

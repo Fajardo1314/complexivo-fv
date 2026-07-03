@@ -38,7 +38,7 @@ const char *TOPIC_PIR = "movimiento_pir";
 const char *TOPIC_LUZ = "aula/luminosidad";
 
 // Pines
-const int PIN_IR1 = 35; // Exterior
+const int PIN_IR1 = 33; // Exterior — ¡Mover cable a GPIO 33!
 const int PIN_IR2 = 32; // Interior (PULLUP)
 const int PIN_PIR = 27;
 const int PIN_MAG = 13; // Magnético (PULLUP) — independiente
@@ -94,8 +94,8 @@ void setup() {
   delay(1000);
   Serial.println("\n=== ESP32 Aforo v3.0 — Anti-Ruido ===\n");
 
-  pinMode(PIN_IR1, INPUT);
-  pinMode(PIN_IR2, INPUT_PULLUP);
+  pinMode(PIN_IR1, INPUT_PULLUP); // GPIO 33 con pull-up
+  pinMode(PIN_IR2, INPUT_PULLUP); // GPIO 32 con pull-up
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_MAG, INPUT_PULLUP);
 
@@ -205,8 +205,6 @@ void publicar(const char *topic, String val) {
 void procesarAforo(unsigned long ahora) {
   // Bloqueo global: no procesar tras cruce válido
   if (ahora - tiempoBloqueo < BLOQUEO_GLOBAL) {
-    lastIR1 = digitalRead(PIN_IR1);
-    lastIR2 = digitalRead(PIN_IR2);
     return;
   }
 
@@ -234,7 +232,7 @@ void procesarAforo(unsigned long ahora) {
     if (ir2 == LOW && lastIR2 == HIGH) {
       // ENTRADA válida
       contadorAforo++;
-      Serial.println("[AFORO] ✅ ENTRADA +" + String(contadorAforo));
+      Serial.println("[AFORO]  ENTRADA +" + String(contadorAforo));
       publicar(TOPIC_AFORO, String(contadorAforo));
       estadoAforo = IDLE;
       tiempoBloqueo = ahora;
@@ -253,7 +251,7 @@ void procesarAforo(unsigned long ahora) {
       contadorAforo--;
       if (contadorAforo < 0)
         contadorAforo = 0;
-      Serial.println("[AFORO] ✅ SALIDA " + String(contadorAforo));
+      Serial.println("[AFORO]  SALIDA " + String(contadorAforo));
       publicar(TOPIC_AFORO, String(contadorAforo));
       estadoAforo = IDLE;
       tiempoBloqueo = ahora;
@@ -275,13 +273,19 @@ void procesarAforo(unsigned long ahora) {
 // ═══════════════════════════════════════════
 void procesarPIR(unsigned long ahora) {
   bool pir = digitalRead(PIN_PIR) == HIGH;
+
+  // Flanco de subida: movimiento empieza
   if (pir && !last_pir && ahora - lastPir > DEBOUNCE_PIR) {
     publicar(TOPIC_PIR, "true");
     lastPir = ahora;
   }
+
+  // Flanco de bajada: movimiento termina
   if (!pir && last_pir && ahora - lastPir > 2000) {
     publicar(TOPIC_PIR, "false");
   }
+
+  // Actualizar estado global siempre
   last_pir = pir;
 }
 
