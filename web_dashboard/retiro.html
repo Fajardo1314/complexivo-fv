@@ -54,6 +54,12 @@
             margin-bottom: 4px;
         }
 
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
         .sub {
             color: var(--muted);
             font-size: 0.85rem;
@@ -146,6 +152,19 @@
             font-size: 0.9rem;
         }
 
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #c8956c, #d4a574);
+            border: none;
+            border-radius: 12px;
+            color: #0d0907;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
         .msg {
             padding: 12px;
             border-radius: 10px;
@@ -197,44 +216,138 @@
             color: var(--danger);
             margin-bottom: 10px;
         }
+
+        .input-group {
+            margin-bottom: 14px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.95rem;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .user-badge {
+            font-size: 0.75rem;
+            color: var(--muted);
+            text-align: right;
+            margin-bottom: 8px;
+        }
+
+        .user-badge strong {
+            color: var(--success);
+        }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            max-width: 380px;
+            width: 90%;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        }
     </style>
 </head>
 
 <body>
     <div class="card">
+        <!-- LOADING -->
         <div id="loading" style="text-align:center;padding:40px 0;">
             <p style="color:var(--muted)">Cargando...</p>
         </div>
 
+        <!-- PRODUCTO (visible para todos) -->
         <div id="productInfo" style="display:none">
+            <div id="sessionBadge" class="user-badge" style="display:none;">Sesion: <strong id="sessionUser">—</strong>
+            </div>
+
             <h1 id="pNombre">—</h1>
             <p class="sub" id="pMarca">—</p>
 
             <div class="stock-big"><span id="pStock">0</span><small>unidades disponibles</small></div>
 
-            <div class="row"><span class="lbl">Código Sistema</span><span class="val" id="pCodigo">—</span></div>
-            <div class="row"><span class="lbl">Cód. Institucional</span><span class="val" id="pCodInst">—</span></div>
-            <div class="row"><span class="lbl">Categoría</span><span class="val" id="pCategoria">—</span></div>
-            <div class="row"><span class="lbl">Ubicación</span><span class="val" id="pUbicacion">—</span></div>
+            <div class="row"><span class="lbl">Codigo Sistema</span><span class="val" id="pCodigo">—</span></div>
+            <div class="row"><span class="lbl">Marca</span><span class="val" id="pMarcaRow">—</span></div>
+            <div class="row"><span class="lbl">Categoria</span><span class="val" id="pCategoria">—</span></div>
+            <div class="row"><span class="lbl">Ubicacion</span><span class="val" id="pUbicacion">—</span></div>
             <div class="row"><span class="lbl">Estado</span><span class="val" id="pEstado">—</span></div>
-            <div class="row" id="pSpecsRow" style="display:none"><span class="lbl">Especificaciones</span><span
-                    class="val" id="pSpecs">—</span></div>
+            <div class="row"><span class="lbl">Descripcion</span><span class="val" id="pDescripcion">—</span></div>
 
             <div class="actions">
-                <button class="btn btn-retiro" id="btnRetirar" onclick="retirar()">📦 Retirar (-1)</button>
-                <button class="btn btn-devolucion" id="btnDevolver" onclick="devolver()">📥 Devolver (+1)</button>
+                <button class="btn btn-retiro" id="btnRetirar">Retirar (-1)</button>
+                <button class="btn btn-devolucion" id="btnDevolver">Devolver (+1)</button>
             </div>
 
             <div class="msg msg-ok" id="msgOk"></div>
             <div class="msg msg-err" id="msgErr"></div>
 
-            <button class="btn-back" onclick="window.location.href='/'">← Volver al Dashboard</button>
+            <button class="btn-back" id="btnLogout" style="display:none;margin-top:8px;">Cerrar Sesion</button>
+            <button class="btn-back" onclick="window.location.href='/'">Volver al Dashboard</button>
         </div>
 
+        <!-- NO ENCONTRADO -->
         <div id="notFound" class="notfound" style="display:none">
             <h2>Producto no encontrado</h2>
-            <p style="color:var(--muted)">El código QR no corresponde a ningún artículo.</p>
-            <button class="btn-back" onclick="window.location.href='/'">← Volver</button>
+            <p style="color:var(--muted)">El codigo QR no corresponde a ningun articulo.</p>
+            <button class="btn-back" onclick="window.location.href='/'">Volver</button>
+        </div>
+    </div>
+
+    <!-- MODAL LOGIN (aparece al hacer clic en Retirar/Devolver) -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal-box">
+            <h2>Iniciar Sesion</h2>
+            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:15px;">Debe autenticarse para retirar o
+                devolver productos</p>
+            <div class="input-group">
+                <label>Usuario</label>
+                <input type="text" id="loginUser" placeholder="Ingrese su usuario">
+            </div>
+            <div class="input-group">
+                <label>Contrasena</label>
+                <input type="password" id="loginPass" placeholder="Ingrese su contrasena">
+            </div>
+            <button class="btn-login" id="btnLogin">Iniciar Sesion</button>
+            <div class="msg msg-err" id="loginErr"></div>
+            <button class="btn-back" id="btnCancelLogin" style="margin-top:8px;">Cancelar</button>
         </div>
     </div>
 
@@ -248,7 +361,27 @@
         const params = new URLSearchParams(window.location.search);
         const productId = params.get('id');
         let prod = null;
+        let usuarioActivo = null;
+        let pendingAction = null; // 'retirar' o 'devolver'
 
+        async function sha256(text) {
+            try {
+                if (window.crypto && window.crypto.subtle) {
+                    const msgBuffer = new TextEncoder().encode(text);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                    const hashArray = Array.from(new Uint8Array(hashBuffer));
+                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                }
+            } catch (e) { }
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) {
+                hash = ((hash << 5) - hash) + text.charCodeAt(i);
+                hash |= 0;
+            }
+            return 'fallback_' + Math.abs(hash).toString(16);
+        }
+
+        // --- CARGAR PRODUCTO (sin login) ---
         async function load() {
             if (!productId) { showNotFound(); return; }
             try {
@@ -269,29 +402,18 @@
         }
 
         function render() {
-            document.getElementById('pNombre').textContent = prod.nombre || '—';
+            document.getElementById('pNombre').textContent = prod.nombre_producto || prod.nombre || '—';
             document.getElementById('pMarca').textContent = prod.marca || '';
-            document.getElementById('pCodigo').textContent = prod.codigo_sistema || productId;
-            document.getElementById('pCodInst').textContent = prod.codigo_institucional || '—';
+            document.getElementById('pCodigo').textContent = productId;
+            document.getElementById('pMarcaRow').textContent = prod.marca || '—';
             document.getElementById('pCategoria').textContent = prod.categoria || '—';
             document.getElementById('pUbicacion').textContent = prod.ubicacion || '—';
+            document.getElementById('pDescripcion').textContent = prod.descripcion || '—';
             const estado = prod.estado || 'Funcional';
             document.getElementById('pEstado').innerHTML = estado === 'Funcional'
                 ? '<span class="badge badge-green">Funcional</span>'
                 : '<span class="badge badge-red">No Funcional</span>';
             updateStock(prod.stock || 0);
-
-            // Mostrar especificaciones si existen
-            const esp = prod.especificaciones;
-            if (esp && (esp.procesador || esp.ram || esp.almacenamiento)) {
-                document.getElementById('pSpecsRow').style.display = 'flex';
-                let parts = [];
-                if (esp.procesador) parts.push(esp.procesador);
-                if (esp.ram) parts.push(esp.ram);
-                if (esp.almacenamiento) parts.push(esp.almacenamiento);
-                if (esp.componentes_adicionales) parts.push(esp.componentes_adicionales);
-                document.getElementById('pSpecs').textContent = parts.join(' | ');
-            }
         }
 
         function updateStock(n) {
@@ -306,41 +428,163 @@
             setTimeout(() => { el.style.display = 'none'; }, 4000);
         }
 
-        window.retirar = async function () {
+        // --- LOGIN MODAL ---
+        function showLoginModal(action) {
+            pendingAction = action;
+            document.getElementById('loginModal').classList.add('active');
+            document.getElementById('loginUser').value = '';
+            document.getElementById('loginPass').value = '';
+            document.getElementById('loginErr').style.display = 'none';
+            document.getElementById('loginUser').focus();
+        }
+
+        function hideLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+            pendingAction = null;
+        }
+
+        document.getElementById('btnCancelLogin').addEventListener('click', hideLoginModal);
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('loginModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('loginModal')) hideLoginModal();
+        });
+
+        // Enter en password
+        document.getElementById('loginPass').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('btnLogin').click();
+        });
+
+        // --- LOGIN ---
+        document.getElementById('btnLogin').addEventListener('click', async () => {
+            const user = document.getElementById('loginUser').value.trim();
+            const pass = document.getElementById('loginPass').value.trim();
+            const errEl = document.getElementById('loginErr');
+
+            if (!user || !pass) {
+                errEl.textContent = 'Ingrese usuario y contrasena.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            errEl.style.display = 'none';
+            document.getElementById('btnLogin').textContent = 'Verificando...';
+            document.getElementById('btnLogin').disabled = true;
+
+            try {
+                const snapshot = await get(ref(db, 'usuarios_sistema'));
+                if (snapshot.exists()) {
+                    const users = snapshot.val();
+                    const hashedPass = await sha256(pass);
+                    for (const key of Object.keys(users)) {
+                        const u = users[key];
+                        if (!u || !u.usuario) continue;
+                        const passMatch = (u.passwordWeb === pass) || (u.passwordHash && u.passwordHash === hashedPass);
+                        if (u.usuario === user && passMatch) {
+                            usuarioActivo = u;
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                errEl.textContent = 'Error de conexion.';
+                errEl.style.display = 'block';
+            }
+
+            document.getElementById('btnLogin').textContent = 'Iniciar Sesion';
+            document.getElementById('btnLogin').disabled = false;
+
+            if (usuarioActivo) {
+                // Login exitoso
+                hideLoginModal();
+                document.getElementById('sessionBadge').style.display = 'block';
+                document.getElementById('sessionUser').textContent = usuarioActivo.usuario;
+                document.getElementById('btnLogout').style.display = 'block';
+
+                // Ejecutar accion pendiente
+                if (pendingAction === 'retirar') {
+                    doRetirar();
+                } else if (pendingAction === 'devolver') {
+                    doDevolver();
+                }
+            } else {
+                errEl.textContent = 'Credenciales incorrectas.';
+                errEl.style.display = 'block';
+            }
+        });
+
+        // --- LOGOUT ---
+        document.getElementById('btnLogout').addEventListener('click', () => {
+            usuarioActivo = null;
+            document.getElementById('sessionBadge').style.display = 'none';
+            document.getElementById('btnLogout').style.display = 'none';
+            showMsg('ok', 'Sesion cerrada.');
+        });
+
+        // --- BOTONES RETIRAR/DEVOLVER ---
+        document.getElementById('btnRetirar').addEventListener('click', () => {
             if (!prod) return;
+            if (prod.stock <= 0) { showMsg('err', 'Sin stock disponible.'); return; }
+            if (!usuarioActivo) {
+                showLoginModal('retirar');
+            } else {
+                doRetirar();
+            }
+        });
+
+        document.getElementById('btnDevolver').addEventListener('click', () => {
+            if (!prod) return;
+            if (!usuarioActivo) {
+                showLoginModal('devolver');
+            } else {
+                doDevolver();
+            }
+        });
+
+        // --- EJECUTAR RETIRO ---
+        async function doRetirar() {
             const stock = prod.stock || 0;
             if (stock <= 0) { showMsg('err', 'Sin stock disponible.'); return; }
             const nuevo = stock - 1;
             try {
                 await update(ref(db, `inventario/${productId}`), { stock: nuevo });
                 await push(ref(db, 'retiros'), {
-                    producto_id: productId, nombre_producto: prod.nombre,
-                    cantidad_retirada: 1, stock_anterior: stock, stock_nuevo: nuevo,
-                    usuario: 'Móvil QR', fecha: new Date().toLocaleString('es-ES')
+                    producto_id: productId,
+                    nombre_producto: prod.nombre_producto || prod.nombre,
+                    cantidad_retirada: 1,
+                    stock_anterior: stock,
+                    stock_nuevo: nuevo,
+                    usuario: usuarioActivo.usuario,
+                    fecha: new Date().toLocaleString('es-ES')
                 });
                 prod.stock = nuevo;
                 updateStock(nuevo);
-                showMsg('ok', `✅ Retirado. Stock: ${nuevo}`);
+                showMsg('ok', `Retirado por ${usuarioActivo.usuario}. Stock: ${nuevo}`);
             } catch (e) { showMsg('err', 'Error al retirar.'); }
-        };
+        }
 
-        window.devolver = async function () {
-            if (!prod) return;
+        // --- EJECUTAR DEVOLUCION ---
+        async function doDevolver() {
             const stock = prod.stock || 0;
             const nuevo = stock + 1;
             try {
                 await update(ref(db, `inventario/${productId}`), { stock: nuevo });
                 await push(ref(db, 'retiros'), {
-                    producto_id: productId, nombre_producto: prod.nombre,
-                    cantidad_retirada: -1, stock_anterior: stock, stock_nuevo: nuevo,
-                    usuario: 'Móvil QR (devolución)', fecha: new Date().toLocaleString('es-ES')
+                    producto_id: productId,
+                    nombre_producto: prod.nombre_producto || prod.nombre,
+                    cantidad_retirada: -1,
+                    stock_anterior: stock,
+                    stock_nuevo: nuevo,
+                    usuario: usuarioActivo.usuario,
+                    fecha: new Date().toLocaleString('es-ES')
                 });
                 prod.stock = nuevo;
                 updateStock(nuevo);
-                showMsg('ok', `✅ Devuelto. Stock: ${nuevo}`);
+                showMsg('ok', `Devuelto por ${usuarioActivo.usuario}. Stock: ${nuevo}`);
             } catch (e) { showMsg('err', 'Error al devolver.'); }
-        };
+        }
 
+        // Cargar producto inmediatamente (sin login)
         load();
     </script>
 </body>

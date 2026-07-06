@@ -19,18 +19,6 @@ services:
     ports:
       - "5000:5000"
 
-  backend-automation:
-    build:
-      context: .
-      dockerfile: Dockerfile.automation
-    container_name: backend-automation
-    restart: unless-stopped
-    network_mode: host
-    privileged: true
-    devices:
-      - "/dev/gpiomem:/dev/gpiomem"
-      - "/dev/mem:/dev/mem"
-
   web-dashboard:
     image: nginx:alpine
     container_name: web-dashboard

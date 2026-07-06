@@ -259,9 +259,10 @@ function updateChart(timeLabel, personas) {
 // --- FIREBASE: MONITOREO TIEMPO REAL ---
 let currentPuertaState = 'CERRADA';
 let currentPirState = false;
+let currentAforo = 0;
 
 function verificarIntrusion() {
-    if (currentPuertaState === 'CERRADA' && currentPirState) {
+    if (currentPuertaState === 'CERRADA' && currentPirState && currentAforo === 0) {
         estadoPir.innerText = "[!] INTRUSIÓN";
         subAlerta.innerText = "¡Movimiento con puerta cerrada!";
         cardAlerta.classList.add('alert-danger');
@@ -318,9 +319,11 @@ onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
     const val = snapshot.val();
     const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
     countPersonas.innerText = personas;
+    currentAforo = personas;
 
     const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     updateChart(timeStr, personas);
+    verificarIntrusion();
 });
 
 // --- FIREBASE: UMBRAL DE LUZ (Soft-Automatización) ---
@@ -1406,6 +1409,10 @@ function cargarFormularioProducto(id, prod) {
     document.getElementById('invUbicacion').value = prod.ubicacion || '';
     document.getElementById('invCategoria').value = prod.categoria || 'Hardware';
     document.getElementById('invEstado').value = prod.estado || 'Funcional';
+    const invMarca = document.getElementById('invMarca');
+    const invDesc = document.getElementById('invDescripcion');
+    if (invMarca) invMarca.value = prod.marca || '';
+    if (invDesc) invDesc.value = prod.descripcion || '';
 
     btnAgregarInventario.textContent = "Guardar Cambios";
     editingProductId = id;
@@ -1430,14 +1437,21 @@ if (btnAgregarInventario) {
         }
 
         try {
+            const invMarca = document.getElementById('invMarca');
+            const invDesc = document.getElementById('invDescripcion');
+            const marca = invMarca ? invMarca.value.trim() : '';
+            const descripcion = invDesc ? invDesc.value.trim() : '';
+
             if (editingProductId) {
-                // Modo Edición
+                // Modo Edicion
                 await update(ref(db, `inventario/${editingProductId}`), {
                     nombre_producto: nombre,
                     stock: stock,
                     ubicacion: ubicacion,
                     categoria: categoria,
-                    estado: estado
+                    estado: estado,
+                    marca: marca,
+                    descripcion: descripcion
                 });
 
                 await registrarAuditoria('Edición Producto', `Producto editado: ${nombre} (ID: ${editingProductId})`);
@@ -1461,7 +1475,9 @@ if (btnAgregarInventario) {
                     stock: stock,
                     ubicacion: ubicacion,
                     categoria: categoria,
-                    estado: estado
+                    estado: estado,
+                    marca: marca,
+                    descripcion: descripcion
                 });
 
                 await registrarAuditoria('Registro Producto', `Producto agregado: ${nombre} (ID: ${finalId})`);
@@ -1571,17 +1587,94 @@ btnIngresar.addEventListener('click', async () => {
         return;
     }
 
-    // --- Acceso directo al Dashboard ---
+    // --- 2FA: Enviar OTP al correo del usuario ---
+    const userCorreo = authenticatedUser.correo;
+    if (userCorreo) {
+        try {
+            const otpResp = await fetch('/api/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ correo: userCorreo })
+            });
+            const otpResult = await otpResp.json();
+            if (otpResp.ok && otpResult.ok) {
+                // Mostrar pantalla OTP
+                mostrarPantallaOTP(authenticatedUser);
+            } else {
+                // Si falla OTP, acceso directo (fallback)
+                console.warn('[OTP] No se pudo enviar OTP, acceso directo:', otpResult.error);
+                accederDashboard(authenticatedUser);
+            }
+        } catch (otpErr) {
+            console.warn('[OTP] Error enviando OTP, acceso directo:', otpErr);
+            accederDashboard(authenticatedUser);
+        }
+    } else {
+        // Sin correo, acceso directo
+        accederDashboard(authenticatedUser);
+    }
+    btnIngresar.disabled = false;
+    btnIngresar.textContent = "Ingresar";
+});
+
+// --- FUNCION 2FA: Acceder al dashboard directamente ---
+function accederDashboard(authenticatedUser) {
     usuarioActivo = authenticatedUser;
     loginOverlay.style.display = "none";
     dashboardContainer.style.display = "flex";
-    btnIngresar.disabled = false;
-    btnIngresar.textContent = "Ingresar";
-    crearToast("[Unlock] Acceso concedido. ¡Bienvenido, " + authenticatedUser.usuario + "!", "success");
+    crearToast("[Unlock] Acceso concedido. Bienvenido, " + authenticatedUser.usuario + "!", "success");
     actualizarPerfil();
     aplicarVisibilidadAdmin();
-    await registrarAuditoria('Inicio Sesión', `Usuario ${authenticatedUser.usuario} inició sesión.`);
-});
+    registrarAuditoria('Inicio Sesion', `Usuario ${authenticatedUser.usuario} inicio sesion.`);
+}
+
+// --- FUNCION 2FA: Mostrar pantalla OTP ---
+function mostrarPantallaOTP(authenticatedUser) {
+    const formLogin = document.getElementById('formLogin');
+    if (!formLogin) return;
+    formLogin.innerHTML = `
+        <h2>Verificacion en Dos Pasos</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">Hemos enviado un codigo de 6 digitos a <strong>${authenticatedUser.correo}</strong></p>
+        <div class="input-group">
+            <label for="otpCode">Codigo de Verificacion</label>
+            <input type="text" id="otpCode" placeholder="000000" maxlength="6"
+                style="text-align:center; font-size:1.5rem; letter-spacing:8px; font-weight:700;">
+        </div>
+        <button class="primary-btn" id="btnVerificarOTP">Verificar Codigo</button>
+        <p id="otpError" style="color: var(--danger); font-size: 0.85rem; margin-top: 10px; display: none;"></p>
+        <button class="secondary-btn" id="btnVolverLogin" style="margin-top:10px;">Volver al Login</button>
+    `;
+
+    document.getElementById('btnVerificarOTP').addEventListener('click', async () => {
+        const codigo = document.getElementById('otpCode').value.trim();
+        if (!codigo || codigo.length !== 6) {
+            document.getElementById('otpError').textContent = "Ingresa el codigo de 6 digitos.";
+            document.getElementById('otpError').style.display = "block";
+            return;
+        }
+        try {
+            const resp = await fetch('/api/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ codigo: codigo })
+            });
+            const result = await resp.json();
+            if (result.valido) {
+                accederDashboard(authenticatedUser);
+            } else {
+                document.getElementById('otpError').textContent = result.error || "Codigo incorrecto.";
+                document.getElementById('otpError').style.display = "block";
+            }
+        } catch (e) {
+            document.getElementById('otpError').textContent = "Error de conexion.";
+            document.getElementById('otpError').style.display = "block";
+        }
+    });
+
+    document.getElementById('btnVolverLogin').addEventListener('click', () => {
+        location.reload();
+    });
+}
 
 // --- LÓGICA: PANEL DE PERFIL Y CERRAR SESIÓN ---
 const profileNombre = document.getElementById('profileNombre');
@@ -1792,8 +1885,116 @@ if (qrSearchInput) {
 }
 
 if (btnExportarPdfLabels) {
-    btnExportarPdfLabels.addEventListener('click', () => {
-        window.print();
+    btnExportarPdfLabels.addEventListener('click', async () => {
+        if (!labelsPrintGrid || labelsPrintGrid.children.length === 0) {
+            crearToast('No hay etiquetas para exportar.', 'danger');
+            return;
+        }
+
+        try {
+            crearToast('Generando PDF...', 'success');
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = 210;
+            const pageHeight = 297;
+            const margin = 15;
+            const labelW = 60;
+            const labelH = 50;
+            const cols = 3;
+            const gapX = (pageWidth - 2 * margin - cols * labelW) / (cols - 1);
+            const gapY = 5;
+
+            let col = 0;
+            let row = 0;
+            let pageNum = 1;
+
+            // Titulo primera pagina
+            pdf.setFontSize(16);
+            pdf.setFont(undefined, 'bold');
+            pdf.text('UCUENCA - INVENTARIO IOT - Etiquetas QR', pageWidth / 2, margin + 5, { align: 'center' });
+            pdf.setFontSize(9);
+            pdf.setFont(undefined, 'normal');
+            pdf.text('Generado: ' + new Date().toLocaleString('es-ES'), pageWidth / 2, margin + 11, { align: 'center' });
+
+            let startY = margin + 18;
+
+            const badges = labelsPrintGrid.querySelectorAll('.printable-badge');
+            for (let i = 0; i < badges.length; i++) {
+                const badge = badges[i];
+                const idText = badge.querySelector('.badge-footer span') ? badge.querySelector('.badge-footer span').textContent : 'ID';
+                const nombreText = badge.querySelector('.badge-header') ? badge.querySelector('.badge-header').textContent : '';
+
+                // Calcular posicion
+                const x = margin + col * (labelW + gapX);
+                const y = startY + row * (labelH + gapY);
+
+                // Verificar si necesitamos nueva pagina
+                if (y + labelH > pageHeight - margin) {
+                    pdf.addPage();
+                    pageNum++;
+                    col = 0;
+                    row = 0;
+                }
+
+                const finalX = margin + col * (labelW + gapX);
+                const finalY = (row === 0 && pageNum === 1) ? startY : margin + row * (labelH + gapY);
+
+                // Dibujar borde de etiqueta
+                pdf.setDrawColor(200, 200, 200);
+                pdf.setLineWidth(0.3);
+                pdf.roundedRect(finalX, finalY, labelW, labelH, 3, 3);
+
+                // Header
+                pdf.setFontSize(6);
+                pdf.setFont(undefined, 'bold');
+                pdf.text('UCUENCA - INVENTARIO IOT', finalX + labelW / 2, finalY + 5, { align: 'center' });
+                pdf.setDrawColor(0);
+                pdf.setLineWidth(0.2);
+                pdf.line(finalX + 5, finalY + 7, finalX + labelW - 5, finalY + 7);
+
+                // Generar QR como imagen usando canvas
+                const qrDiv = badge.querySelector('.qr-preview-img, [id^="qr-preview-"]');
+                if (qrDiv) {
+                    const canvas = qrDiv.querySelector('canvas');
+                    const img = qrDiv.querySelector('img');
+                    let imgData = null;
+                    if (canvas) {
+                        imgData = canvas.toDataURL('image/png');
+                    } else if (img) {
+                        // Crear canvas temporal para convertir img
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = img.width || 130;
+                        tempCanvas.height = img.height || 130;
+                        const tCtx = tempCanvas.getContext('2d');
+                        tCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+                        imgData = tempCanvas.toDataURL('image/png');
+                    }
+                    if (imgData) {
+                        const qrSize = 30;
+                        pdf.addImage(imgData, 'PNG', finalX + (labelW - qrSize) / 2, finalY + 9, qrSize, qrSize);
+                    }
+                }
+
+                // ID del producto
+                pdf.setFontSize(7);
+                pdf.setFont(undefined, 'bold');
+                pdf.text(idText, finalX + labelW / 2, finalY + 44, { align: 'center' });
+
+                // Avanzar posicion
+                col++;
+                if (col >= cols) {
+                    col = 0;
+                    row++;
+                }
+            }
+
+            pdf.save('etiquetas_qr_inventario.pdf');
+            crearToast('PDF descargado correctamente.', 'success');
+        } catch (e) {
+            console.error('Error generando PDF:', e);
+            crearToast('Error al generar PDF: ' + e.message, 'danger');
+        }
     });
 }
 

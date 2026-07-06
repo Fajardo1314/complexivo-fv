@@ -38,10 +38,14 @@ const char *TOPIC_PIR = "movimiento_pir";
 const char *TOPIC_LUZ = "aula/luminosidad";
 
 // Pines
-const int PIN_IR1 = 33; // Exterior — ¡Mover cable a GPIO 33!
+const int PIN_IR1 = 33; // Exterior
 const int PIN_IR2 = 32; // Interior (PULLUP)
 const int PIN_PIR = 27;
 const int PIN_MAG = 13; // Magnético (PULLUP) — independiente
+
+// Configuracion sensor magnetico
+// Cambiar a true si el sensor reporta invertido (cerrado muestra abierto)
+const bool INVERTIR_MAGNETICO = true;
 
 // ═══════════════════════════════════════════
 //  CONSTANTES DE TIEMPO (ms)
@@ -91,8 +95,8 @@ int lastIR2 = HIGH;
 // ═══════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("\n=== ESP32 Aforo v3.0 — Anti-Ruido ===\n");
+  delay(2000);
+  Serial.println("\n=== ESP32 Aforo v4.0 — Anti-Ruido + Sync ===\n");
 
   pinMode(PIN_IR1, INPUT_PULLUP); // GPIO 33 con pull-up
   pinMode(PIN_IR2, INPUT_PULLUP); // GPIO 32 con pull-up
@@ -100,11 +104,17 @@ void setup() {
   pinMode(PIN_MAG, INPUT_PULLUP);
 
   Wire.begin(21, 22);
+  delay(500); // Esperar a que el BH1750 se estabilice
   bh1750_ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
-  if (bh1750_ok)
+  if (bh1750_ok) {
     Serial.println("[BH1750] OK");
-  else
-    Serial.println("[BH1750] No detectado");
+    // Descartar primera lectura (puede ser 0.0)
+    float descarte = lightMeter.readLightLevel();
+    delay(200);
+  } else {
+    Serial.println(
+        "[BH1750] No detectado - verificar conexiones I2C (SDA=21, SCL=22)");
+  }
 
   conectarWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
@@ -296,9 +306,19 @@ void procesarPuerta(unsigned long ahora) {
   if (ahora - lastPuer < DEBOUNCE_PUERTA)
     return;
   int est = digitalRead(PIN_MAG);
+
+  // Aplicar inversion si es necesario
+  bool cerrada;
+  if (INVERTIR_MAGNETICO) {
+    cerrada = (est == HIGH); // Sensor invertido: HIGH = cerrada
+  } else {
+    cerrada = (est == LOW); // Sensor normal: LOW = cerrada
+  }
+
+  // Enviar solo si hubo cambio de estado
   if (est != lastPuerta) {
-    publicar(TOPIC_PUERTA, est == LOW ? "0" : "1");
-    Serial.println("[PUERTA] " + String(est == LOW ? "CERRADA" : "ABIERTA"));
+    publicar(TOPIC_PUERTA, cerrada ? "0" : "1");
+    Serial.println("[PUERTA] " + String(cerrada ? "CERRADA" : "ABIERTA"));
     lastPuerta = est;
   }
   lastPuer = ahora;
@@ -311,7 +331,7 @@ void procesarLuz(unsigned long ahora) {
   if (!bh1750_ok || ahora - lastLuz < INTERVALO_LUZ)
     return;
   float lux = lightMeter.readLightLevel();
-  if (lux >= 0)
+  if (lux > 0)
     publicar(TOPIC_LUZ, String(lux, 1));
   lastLuz = ahora;
 }
