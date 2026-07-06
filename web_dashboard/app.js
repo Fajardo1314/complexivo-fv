@@ -2,44 +2,19 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getDatabase, ref, onValue, update, remove, set, get, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // --- CONFIGURACIÓN FIREBASE ---
-// === OUR database (complexivo-fv) ===
 const OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/";
 const ourApp = initializeApp({ databaseURL: OUR_DB_URL }, 'ours');
 const db = getDatabase(ourApp);
 
-// === Sin base de datos externa - TODO va a complexivo-fv ===
-const companionDb = null;
+const NEW_CONEXION_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/";
+const companionApp = initializeApp({ databaseURL: NEW_CONEXION_DB_URL }, 'companion');
+const companionDb = getDatabase(companionApp);
 
-
-// --- SHA-256 HASH HELPER ---
-async function sha256(text) {
-    try {
-        if (window.crypto && window.crypto.subtle) {
-            const msgBuffer = new TextEncoder().encode(text);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-    } catch (e) {
-        console.warn('[Hash] crypto.subtle no disponible, usando fallback.');
-    }
-    // Fallback simple hash para compatibilidad
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-        const chr = text.charCodeAt(i);
-        hash = ((hash << 5) - hash) + chr;
-        hash |= 0;
-    }
-    return 'fallback_' + Math.abs(hash).toString(16);
-}
 // --- GLOBAL STATE ---
 let usuarioActivo = null;
+let permanenciaInterval = null;
 
-// Audio alarm state (declared globally to avoid TDZ with Firebase listeners)
-let audioCtx = null;
-let beepInterval = null;
-
-// Inicializar el admin en Firebase si no existe
+// Initialize Admin if not exists
 async function inicializarAdmin() {
     try {
         const adminRef = ref(db, 'usuarios_sistema/admin');
@@ -52,15 +27,14 @@ async function inicializarAdmin() {
                 rol: "SuperAdmin",
                 id_operador: "ADM_001"
             });
-            console.log("[Firebase] Admin de sistema inicializado correctamente.");
         }
     } catch (e) {
-        console.error("Error al inicializar admin en Firebase:", e);
+        console.error("Error al inicializar admin:", e);
     }
 }
 inicializarAdmin();
 
-// --- AUDIT TRAIL LOGGING ---
+// --- AUDIT TRAIL ---
 async function registrarAuditoria(accion, detalles) {
     if (!usuarioActivo) return;
     try {
@@ -73,2212 +47,926 @@ async function registrarAuditoria(accion, detalles) {
             detalles: detalles
         });
     } catch (e) {
-        console.error("Error al registrar auditoría:", e);
+        console.error("Error al registrar auditoria:", e);
     }
 }
 
-// --- UI VARIABLES ---
+// --- UI ELEMENTS ---
 const navBtns = document.querySelectorAll('.nav-btn');
 const panels = document.querySelectorAll('.panel');
 
-const countPersonas = document.getElementById('countPersonas');
 const estadoPir = document.getElementById('estadoPir');
 const subAlerta = document.getElementById('subAlerta');
 const cardAlerta = document.getElementById('cardAlerta');
-const iconAlerta = document.getElementById('iconAlerta');
 
 const estadoChapa = document.getElementById('estadoChapa');
 const cardChapa = document.getElementById('cardChapa');
-const iconChapa = document.getElementById('iconChapa');
 
 const estadoFoco = document.getElementById('estadoFoco');
 const cardFoco = document.getElementById('cardFoco');
 const subFoco = document.getElementById('subFoco');
 
-const estadoPuerta = document.getElementById('estadoPuerta');
-const cardPuerta = document.getElementById('cardPuerta');
-const subPuerta = document.getElementById('subPuerta');
-const iconPuerta = document.getElementById('iconPuerta');
-
-const estadoInfrarrojo = document.getElementById('estadoInfrarrojo');
-const cardInfrarrojo = document.getElementById('cardInfrarrojo');
-const subInfrarrojo = document.getElementById('subInfrarrojo');
-const iconInfrarrojo = document.getElementById('iconInfrarrojo');
-
 const listaInventario = document.getElementById('listaInventario');
 const listaAccesos = document.getElementById('listaAccesos');
+const listaRetiros = document.getElementById('listaRetiros');
 const listaUsuarios = document.getElementById('listaUsuarios');
 const listaUsuariosWeb = document.getElementById('listaUsuariosWeb');
 
-// Formulario Usuarios RFID
+// Forms & Configs
 const btnGuardarUsuario = document.getElementById('btnGuardarUsuario');
 const userUid = document.getElementById('userUid');
 const userNombre = document.getElementById('userNombre');
 const userRol = document.getElementById('userRol');
+const userCorreo = document.getElementById('userCorreo');
 
-// Formulario Usuarios Web Plataforma
 const btnGuardarWebUsuario = document.getElementById('btnGuardarWebUsuario');
 const webUserOperatorId = document.getElementById('webUserOperatorId');
 const webUserUsername = document.getElementById('webUserUsername');
 const webUserPassword = document.getElementById('webUserPassword');
 const webUserCorreo = document.getElementById('webUserCorreo');
 const webUserRol = document.getElementById('webUserRol');
-const webUserFormTitle = document.getElementById('webUserFormTitle');
 
-// Botón Datos Semilla
-const btnSeedData = document.getElementById('btnSeedData');
+// --- TOAST FUNCTION ---
+function crearToast(msg, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.style.borderLeftColor = type === 'success' ? 'var(--success)' : type === 'danger' ? 'var(--danger)' : 'var(--primary)';
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.remove();
+    }, 4000);
+}
 
-// QR Labels panel
-const qrSearchInput = document.getElementById('qrSearchInput');
-const labelsPrintGrid = document.getElementById('labelsPrintGrid');
-const btnExportarPdfLabels = document.getElementById('btnExportarPdfLabels');
-
-// --- NAVEGACIÓN ---
+// --- TAB NAVIGATION ---
 navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         navBtns.forEach(b => b.classList.remove('active'));
         panels.forEach(p => p.classList.remove('active'));
-
         btn.classList.add('active');
         document.getElementById(btn.dataset.target).classList.add('active');
     });
 });
 
-// --- HAMBURGER MENU (MOBILE) ---
-const hamburgerBtn = document.getElementById('hamburgerBtn');
-const sidebar = document.getElementById('sidebar');
-if (hamburgerBtn && sidebar) {
-    hamburgerBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sidebar.classList.toggle('active');
+// Ir a Ajustes de Inventario desde el panel de Inventario
+const btnIrAjustes = document.getElementById('btnIrAjustes');
+if (btnIrAjustes) {
+    btnIrAjustes.addEventListener('click', () => {
+        panels.forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-ajustes-inventario').classList.add('active');
     });
-
-    // Close sidebar when clicking a nav button on mobile
-    sidebar.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-            }
-        });
-    });
-
-    // Close sidebar when clicking outside on mobile
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && sidebar.classList.contains('active')) {
-            if (!sidebar.contains(e.target) && e.target !== hamburgerBtn && !hamburgerBtn.contains(e.target)) {
-                sidebar.classList.remove('active');
-            }
-        }
-    });
-
-    // Show hamburger on mobile
-    function checkMobile() {
-        if (window.innerWidth <= 768) {
-            hamburgerBtn.style.display = 'flex';
-        } else {
-            hamburgerBtn.style.display = 'none';
-            sidebar.classList.remove('active');
-        }
-    }
-    window.addEventListener('resize', checkMobile);
-    checkMobile();
 }
 
-// --- SISTEMA TIME & DATE ---
+const btnVolverInventario = document.getElementById('btnVolverInventario');
+if (btnVolverInventario) {
+    btnVolverInventario.addEventListener('click', () => {
+        panels.forEach(p => p.classList.remove('active'));
+        document.getElementById('panel-inventario').classList.add('active');
+    });
+}
+
+// --- TIME DISPLAY ---
 setInterval(() => {
     const ahora = new Date();
-    document.getElementById('system-time').innerText = ahora.toLocaleTimeString('es-ES');
+    const el = document.getElementById('system-time');
+    if (el) el.innerText = ahora.toLocaleTimeString('es-ES');
 }, 1000);
 
-// --- CHART.JS CONFIG ---
-let traficoChart = null;
-try {
-    if (typeof Chart !== 'undefined') {
-        const ctx = document.getElementById('traficoChart').getContext('2d');
-        traficoChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Personas en el Aula (Historial)',
-                    data: [],
-                    borderColor: '#c8956c',
-                    backgroundColor: 'rgba(200, 149, 108, 0.08)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#d4a574',
-                    pointBorderColor: '#fff',
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255,255,255,0.03)' },
-                        ticks: { color: '#94a3b8', stepSize: 1 }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#94a3b8' }
+// --- LOGIN MANAGER ---
+const loginOverlay = document.getElementById('loginOverlay');
+const btnIngresar = document.getElementById('btnIngresar');
+const loginUser = document.getElementById('loginUser');
+const loginPass = document.getElementById('loginPass');
+const dashboardContainer = document.querySelector('.dashboard-container');
+
+btnIngresar.addEventListener('click', async () => {
+    const u = loginUser.value.trim();
+    const p = loginPass.value.trim();
+    if (!u || !p) {
+        crearToast("Completa todos los campos", "danger");
+        return;
+    }
+    try {
+        const snap = await get(ref(db, `usuarios_sistema/${u}`));
+        if (snap.exists()) {
+            const user = snap.val();
+            if (user.passwordWeb === p) {
+                usuarioActivo = user;
+                crearToast(`Bienvenido ${user.usuario}`, "success");
+                loginOverlay.style.display = 'none';
+                dashboardContainer.style.display = 'flex';
+                
+                // Set Profile Details
+                document.getElementById('profileNombre').innerText = user.usuario;
+                document.getElementById('profileRol').innerText = user.rol;
+                document.getElementById('profileUsuario').innerText = user.usuario;
+                document.getElementById('profileCorreo').innerText = user.correo || "—";
+                document.getElementById('profileIdOperador').innerText = user.id_operador || "—";
+                
+                // Restrict UI tabs based on roles
+                navBtns.forEach(btn => {
+                    const roles = btn.dataset.roles ? btn.dataset.roles.split(',') : [];
+                    if (roles.length > 0 && !roles.includes(user.rol)) {
+                        btn.style.display = 'none';
+                    } else {
+                        btn.style.display = 'flex';
                     }
-                },
-                plugins: {
-                    legend: { display: false }
+                });
+
+                // Server tab restriction
+                const serverTab = document.querySelector('[data-target="panel-servidor"]');
+                if (serverTab) {
+                    if (user.rol === "SuperAdmin" || user.rol === "Docente") {
+                        serverTab.style.display = 'flex';
+                    } else {
+                        serverTab.style.display = 'none';
+                    }
                 }
+                
+                await registrarAuditoria('Login', 'Usuario ingreso a la plataforma');
+                cargarAuditoria();
+            } else {
+                crearToast("Contraseña incorrecta", "danger");
             }
-        });
-    } else {
-        console.warn("Chart.js no está cargado. Se omitirá el gráfico de afluencia.");
+        } else {
+            crearToast("Usuario no encontrado", "danger");
+        }
+    } catch (e) {
+        console.error(e);
+        crearToast("Error de conexion", "danger");
     }
-} catch (e) {
-    console.error("Error al inicializar Chart.js: ", e);
-}
-
-// Función para actualizar gráfico limitando a 12 puntos
-function updateChart(timeLabel, personas) {
-    if (!traficoChart) return;
-    if (traficoChart.data.labels.length > 12) {
-        traficoChart.data.labels.shift();
-        traficoChart.data.datasets[0].data.shift();
-    }
-    // Evitar añadir duplicados si el último punto de tiempo es el mismo
-    if (traficoChart.data.labels.length > 0 && traficoChart.data.labels[traficoChart.data.labels.length - 1] === timeLabel) {
-        traficoChart.data.datasets[0].data[traficoChart.data.datasets[0].data.length - 1] = personas;
-    } else {
-        traficoChart.data.labels.push(timeLabel);
-        traficoChart.data.datasets[0].data.push(personas);
-    }
-    traficoChart.update();
-}
-
-// --- FIREBASE: MONITOREO TIEMPO REAL ---
-let currentPuertaState = 'CERRADA';
-let currentPirState = false;
-let currentAforo = 0;
-
-function verificarIntrusion() {
-    if (currentPuertaState === 'CERRADA' && currentPirState && currentAforo === 0) {
-        estadoPir.innerText = "[!] INTRUSIÓN";
-        subAlerta.innerText = "¡Movimiento con puerta cerrada!";
-        cardAlerta.classList.add('alert-danger');
-        cardAlerta.classList.remove('card-secure');
-        iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
-        mostrarAlertaCritica("¡Movimiento detectado con el cerrojo de la puerta CERRADO!");
-    } else if (currentPirState) {
-        estadoPir.innerText = "[!] ALERTA";
-        subAlerta.innerText = "¡Movimiento detectado!";
-        cardAlerta.classList.add('alert-danger');
-        cardAlerta.classList.remove('card-secure');
-        iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`;
-        detenerAlertaCritica();
-    } else {
-        estadoPir.innerText = "Seguro";
-        subAlerta.innerText = "No se detecta movimiento";
-        cardAlerta.classList.remove('alert-danger');
-        cardAlerta.classList.add('card-secure');
-        iconAlerta.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z"/></svg>`;
-        detenerAlertaCritica();
-    }
-}
-
-// Sensor PIR (leer de NUESTRA DB - complexivo-fv, ruta monitoreo)
-onValue(ref(db, 'monitoreo/movimiento_pir'), (snapshot) => {
-    const val = snapshot.val();
-    currentPirState = (val === true || val === "true" || val === "Movimiento Detectado" || val === 1 || val === "1");
-    verificarIntrusion();
 });
 
-// Sensor Puerta (leer de NUESTRA DB - complexivo-fv, path /monitoreo/puerta como booleano)
-onValue(ref(db, 'monitoreo/puerta'), (snapshot) => {
-    const val = snapshot.val();
-    const isOpen = (val === true || val === 1);
-    currentPuertaState = isOpen ? 'ABIERTA' : 'CERRADA';
+document.getElementById('btnCerrarSesion').addEventListener('click', async () => {
+    await registrarAuditoria('Logout', 'Usuario cerro sesion');
+    usuarioActivo = null;
+    dashboardContainer.style.display = 'none';
+    loginOverlay.style.display = 'flex';
+    loginUser.value = '';
+    loginPass.value = '';
+});
 
-    estadoChapa.innerText = currentPuertaState;
-    if (isOpen) {
-        cardChapa.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-        cardChapa.style.boxShadow = '0 10px 30px rgba(16, 185, 129, 0.15)';
-        iconChapa.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" class="lock-open"><path fill="currentColor" d="M18,8H16V6A4,4 0 0,0 8,6V8H6A2,2 0 0,0 4,10V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V10A2,2 0 0,0 18,8M9,6A2,2 0 0,1 13,4A2,2 0 0,1 15,6V8H9V6M18,20H6V10H18V20M12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13Z"/></svg>`;
-        cardChapa.querySelector('.metric-sub').innerText = "Acceso liberado";
+// --- AUDIT TRAIL RENDER ---
+async function cargarAuditoria() {
+    const list = document.getElementById('profileAuditoria');
+    if (!list) return;
+    onValue(ref(db, 'auditoria'), (snap) => {
+        list.innerHTML = '';
+        const data = snap.val();
+        if (data) {
+            Object.values(data).reverse().forEach(log => {
+                if (log.usuario === usuarioActivo.usuario) {
+                    const p = document.createElement('div');
+                    p.style.cssText = 'padding:10px; border-bottom:1px solid var(--glass-border); font-size:0.85rem;';
+                    p.innerHTML = `<span style="color:var(--primary); font-weight:700;">[${log.timestamp}]</span> <strong>${log.accion}</strong>: ${log.detalles}`;
+                    list.appendChild(p);
+                }
+            });
+        } else {
+            list.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:20px;">No hay registros de actividad.</p>';
+        }
+    });
+}
+
+// --- REAL-TIME MONITORING LISTENERS ---
+// Stay Counter (Permanencia)
+onValue(ref(db, 'monitoreo/permanencia'), (snapshot) => {
+    const data = snapshot.val();
+    const clock = document.getElementById('permanenciaReloj');
+    const userLabel = document.getElementById('permanenciaUsuario');
+    if (permanenciaInterval) clearInterval(permanenciaInterval);
+
+    if (data && data.activo) {
+        const start = new Date(data.inicio).getTime();
+        userLabel.innerText = data.usuario || "Usuario desconocido";
+        permanenciaInterval = setInterval(() => {
+            const diff = Date.now() - start;
+            const hrs = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            clock.innerText = `${hrs}:${mins}:${secs}`;
+        }, 1000);
+    } else {
+        clock.innerText = "00:00:00";
+        userLabel.innerText = "Nadie adentro";
+    }
+});
+
+// PIR Motion
+onValue(ref(db, 'monitoreo/movimiento_pir'), (snapshot) => {
+    const val = snapshot.val();
+    if (val) {
+        estadoPir.innerText = "MOVIMIENTO";
+        subAlerta.innerText = "Se detecto movimiento";
+        cardAlerta.classList.add('alert-danger');
+    } else {
+        estadoPir.innerText = "Seguro";
+        subAlerta.innerText = "Sin movimiento";
+        cardAlerta.classList.remove('alert-danger');
+    }
+});
+
+// Chapa/Door Strike
+onValue(ref(db, 'monitoreo/estado_chapa'), (snapshot) => {
+    const val = snapshot.val();
+    estadoChapa.innerText = val || "CERRADA";
+    if (val === "ABIERTA") {
+        cardChapa.style.borderColor = 'var(--success)';
+        cardChapa.style.boxShadow = '0 10px 30px var(--success-glow)';
     } else {
         cardChapa.style.borderColor = '';
         cardChapa.style.boxShadow = '';
-        iconChapa.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" class="lock-closed"><path fill="currentColor" d="M18,8H17V6A5,5 0 0,0 7,6V8H6A2,2 0 0,0 4,10V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V10A2,2 0 0,0 18,8M9,6A3,3 0 0,1 15,6V8H9V6M18,20H6V10H18V20M12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13Z"/></svg>`;
-        cardChapa.querySelector('.metric-sub').innerText = "Puerta asegurada";
-    }
-    verificarIntrusion();
-});
-
-// Sensor Infrarrojo (Cantidad de Personas / Aforo - NUESTRA DB, ruta monitoreo)
-onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
-    const val = snapshot.val();
-    const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
-    countPersonas.innerText = personas;
-    currentAforo = personas;
-
-    const timeStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    updateChart(timeStr, personas);
-    verificarIntrusion();
-});
-
-// --- FIREBASE: UMBRAL DE LUZ (Soft-Automatización) ---
-onValue(ref(db, 'configuracion/umbral_luxes'), (snapshot) => {
-    const val = snapshot.val();
-    const umbral = (val && val > 0) ? val : 500;
-    const slider = document.getElementById('umbralLuxSlider');
-    const label = document.getElementById('umbralLuxLabel');
-    if (slider) slider.value = umbral;
-    if (label) label.innerText = umbral + ' lux';
-});
-
-onValue(ref(db, 'monitoreo/lux_actual'), (snapshot) => {
-    const val = snapshot.val();
-    const el = document.getElementById('luxActual');
-    if (el) el.innerText = (val !== null && val !== undefined) ? val + ' lux' : '--';
-});
-
-onValue(ref(db, 'monitoreo/estado_luces'), (snapshot) => {
-    const val = snapshot.val();
-    const el = document.getElementById('estadoLucesAuto');
-    if (el) {
-        if (val === 1) {
-            el.innerHTML = '<span class="badge badge-green">Encendido (auto)</span>';
-        } else {
-            el.innerHTML = '<span class="badge" style="background:rgba(148,163,184,0.15);color:var(--text-muted);border:1px solid rgba(148,163,184,0.3);">Apagado (auto)</span>';
-        }
     }
 });
 
-// Guardar umbral desde slider
-const umbralSlider = document.getElementById('umbralLuxSlider');
-if (umbralSlider) {
-    umbralSlider.addEventListener('change', async (e) => {
-        const val = parseInt(e.target.value);
-        if (val > 0) {
-            await set(ref(db, 'configuracion/umbral_luxes'), val);
-            crearToast('Umbral de luz actualizado a ' + val + ' lux', 'success');
-        }
-    });
-}
-
-// --- FIREBASE: CONTROL FOCO INTELIGENTE MERCURY ---
+// Foco Switch
 onValue(ref(db, 'estado_foco'), (snapshot) => {
-    const raw = snapshot.val();
-    const val = (raw || "").toString().trim().toUpperCase();
-    const isEncendido = (val === "ENCENDIDO" || val === "ON" || val === "TRUE" || val === "1");
-    if (isEncendido) {
-        estadoFoco.innerHTML = '<span class="badge badge-green" style="box-shadow: 0 0 10px rgba(16,185,129,0.5);">[Luz] Encendido</span>';
-        cardFoco.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-        cardFoco.style.boxShadow = '0 10px 30px rgba(16, 185, 129, 0.15)';
-        subFoco.innerText = "Luz artificial activada";
+    const val = snapshot.val();
+    estadoFoco.innerText = val || "Apagado";
+    if (val === "ENCENDIDO") {
+        cardFoco.style.borderColor = 'var(--warning)';
+        cardFoco.style.boxShadow = '0 10px 30px var(--warning-glow)';
+        subFoco.innerText = "Luz artificial encendida";
     } else {
-        estadoFoco.innerHTML = '<span class="badge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">[Off] Apagado</span>';
         cardFoco.style.borderColor = '';
         cardFoco.style.boxShadow = '';
-        subFoco.innerText = "Luz artificial desactivada";
+        subFoco.innerText = "Luz artificial apagada";
     }
 });
 
-// --- FIREBASE: INVENTARIO (Tabla limpia + Modales) ---
-let todosLosProductos = {};
-onValue(ref(db, 'inventario'), (snapshot) => {
-    listaInventario.innerHTML = '';
-    const data = snapshot.val();
-    todosLosProductos = data || {};
-    actualizarEtiquetasQR();
-    if (data) {
-        Object.keys(data).forEach(key => {
-            const prod = data[key];
-            const nombre = prod.nombre || prod.nombre_producto || '—';
-            const marca = prod.marca || '—';
-            const ubicacion = prod.ubicacion || '—';
-            const categoria = prod.categoria || 'General';
-            const stock = prod.stock || 0;
-            const estado = prod.estado || 'Funcional';
-            const estadoBadge = estado === 'Funcional'
-                ? '<span class="badge badge-green">Funcional</span>'
-                : '<span class="badge badge-red">No Funcional</span>';
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><span style="font-family:monospace; color:var(--primary); font-weight:700; font-size:0.8rem;">${key}</span></td>
-                <td><strong>${nombre}</strong></td>
-                <td>${marca}</td>
-                <td>${categoria}</td>
-                <td>${ubicacion}</td>
-                <td><span class="badge ${stock > 0 ? 'badge-green' : 'badge-red'}">${stock} und</span></td>
-                <td>${estadoBadge}</td>
-                <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;">
-                    <button class="action-btn qr-btn" data-id="${key}" title="Ver QR" style="padding:5px 10px;font-size:0.75rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.4);color:var(--primary);border-radius:8px;cursor:pointer;font-weight:600;">QR</button>
-                    <button class="action-btn edit-btn" data-id="${key}" title="Editar" style="padding:5px 10px;font-size:0.75rem;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:var(--accent);border-radius:8px;cursor:pointer;font-weight:600;">Editar</button>
-                    <button class="action-btn delete-btn" data-id="${key}" title="Eliminar" style="padding:5px 10px;font-size:0.75rem;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:var(--danger);border-radius:8px;cursor:pointer;font-weight:600;">Eliminar</button>
-                </td>
-            `;
-            // QR Modal
-            tr.querySelector('.qr-btn').addEventListener('click', (e) => {
-                mostrarModalQR(key, nombre);
-            });
-            // Edit
-            tr.querySelector('.edit-btn').addEventListener('click', (e) => {
-                cargarFormularioProducto(key, prod);
-            });
-            // Delete
-            tr.querySelector('.delete-btn').addEventListener('click', (e) => {
-                eliminarProducto(key);
-            });
-            listaInventario.appendChild(tr);
-        });
+// Toggle Foco Manually
+document.getElementById('btnToggleFoco').addEventListener('click', async () => {
+    const stateRef = ref(db, 'estado_foco');
+    const snap = await get(stateRef);
+    const curr = snap.val();
+    const target = curr === "ENCENDIDO" ? "APAGADO" : "ENCENDIDO";
+    await set(stateRef, target);
+    crearToast(`Comando de luz cambiado a ${target}`, "success");
+});
+
+// Door Open Companion command
+document.getElementById('btnAbrirPuertaRemota').addEventListener('click', async () => {
+    try {
+        await set(ref(companionDb, 'puerta/estado'), "ABIERTA");
+        await set(ref(companionDb, 'puerta/ultimo_cambio'), new Date().toLocaleString());
+        crearToast("Comando de apertura remota enviado a new-conexion", "success");
+        setTimeout(async () => {
+            await set(ref(companionDb, 'puerta/estado'), "CERRADA");
+        }, 5000);
+    } catch (e) {
+        crearToast("Error al enviar comando companion", "danger");
+    }
+});
+
+// Nocturnal Alarm Dialog (Forbidden hours motion)
+const modalConfirmacionPresencia = document.getElementById('modalConfirmacionPresencia');
+onValue(ref(db, 'monitoreo/alerta_pir_nocturna'), (snapshot) => {
+    if (snapshot.val() === true) {
+        modalConfirmacionPresencia.style.display = 'flex';
     } else {
-        listaInventario.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No hay productos registrados.</td></tr>';
+        modalConfirmacionPresencia.style.display = 'none';
     }
 });
 
-// --- MODAL: DETALLES DEL PRODUCTO ---
-function mostrarModalDetalles(id, prod) {
-    let modal = document.getElementById('modal-detalles');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modal-detalles';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:11000;display:flex;align-items:center;justify-content:center;';
-        document.body.appendChild(modal);
-    }
-    const nombre = prod.nombre || prod.nombre_producto || '—';
-    const marca = prod.marca || '—';
-    const desc = prod.descripcion || prod.observaciones || '—';
-    const especs = prod.especificaciones || {};
-    const especsHTML = Object.keys(especs).length > 0
-        ? Object.entries(especs).map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--glass-border);"><span style="color:var(--text-muted);text-transform:capitalize;">${k}</span><span style="font-weight:600;">${v}</span></div>`).join('')
-        : '<p style="color:var(--text-muted);">Sin especificaciones técnicas.</p>';
-    modal.innerHTML = `
-        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:480px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);max-height:80vh;overflow-y:auto;">
-            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">📋 Detalles del Producto</h2>
-            <p style="font-family:monospace;color:var(--primary);font-size:0.8rem;margin-bottom:20px;">${id}</p>
-            <div style="margin-bottom:15px;">
-                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Nombre</p>
-                <p style="font-weight:600;">${nombre}</p>
-            </div>
-            <div style="margin-bottom:15px;">
-                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Marca</p>
-                <p style="font-weight:600;">${marca}</p>
-            </div>
-            <div style="margin-bottom:15px;">
-                <p style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;">Descripción / Observaciones</p>
-                <p style="font-weight:400;color:var(--text-main);line-height:1.5;">${desc}</p>
-            </div>
-            <h3 style="font-size:0.9rem;font-weight:700;margin:20px 0 10px;color:var(--accent);">Especificaciones Técnicas</h3>
-            ${especsHTML}
-            <button class="secondary-btn" onclick="document.getElementById('modal-detalles').style.display='none'" style="margin-top:20px;width:100%;">Cerrar</button>
-        </div>
-    `;
-    modal.style.display = 'flex';
-}
+document.getElementById('btnPresenciaSi').addEventListener('click', async () => {
+    await set(ref(db, 'monitoreo/alerta_pir_nocturna'), false);
+    await set(ref(db, 'estado_foco'), "ENCENDIDO");
+    crearToast("Se encendieron las luces por confirmacion de presencia", "success");
+});
 
-// --- MODAL: GESTIONAR STOCK (Retirar / Devolver) ---
-function mostrarModalGestionar(id, prod) {
-    if (!usuarioActivo) {
-        mostrarAlertaAccesoDenegado();
+document.getElementById('btnPresenciaNo').addEventListener('click', async () => {
+    await set(ref(db, 'monitoreo/alerta_pir_nocturna'), false);
+    await set(ref(db, 'estado_foco'), "APAGADO");
+    crearToast("Luces permanecen apagadas", "info");
+});
+
+// BH1750 Lux Threshold Slider
+const umbralSlider = document.getElementById('umbralLuxSlider');
+const umbralLabel = document.getElementById('umbralLuxLabel');
+
+onValue(ref(db, 'configuracion/umbral_luxes'), (snap) => {
+    const val = snap.val() || 100;
+    umbralSlider.value = val;
+    umbralLabel.innerText = `${val} lux`;
+});
+
+umbralSlider.addEventListener('input', (e) => {
+    umbralLabel.innerText = `${e.target.value} lux`;
+});
+
+umbralSlider.addEventListener('change', async (e) => {
+    await set(ref(db, 'configuracion/umbral_luxes'), parseInt(e.target.value));
+    crearToast("Umbral de luxes guardado", "success");
+});
+
+// Save Time Foco Limit
+document.getElementById('btnGuardarTiempoFoco').addEventListener('click', async () => {
+    const val = parseFloat(document.getElementById('inputTiempoFoco').value) || 10;
+    const unidad = document.getElementById('selectUnidadFoco').value;
+    await set(ref(db, 'configuracion/tiempo_encendido_luces'), { valor: val, unidad: unidad });
+    crearToast(`Temporizador de luces fijado en ${val} ${unidad}`, "success");
+});
+
+onValue(ref(db, 'configuracion/tiempo_encendido_luces'), (snap) => {
+    const data = snap.val();
+    if (data) {
+        document.getElementById('inputTiempoFoco').value = data.valor || 10;
+        document.getElementById('selectUnidadFoco').value = data.unidad || "minutos";
+    }
+});
+
+// Horario Permitted Edits (Docente / SuperAdmin Only)
+document.getElementById('btnGuardarHorario').addEventListener('click', async () => {
+    if (usuarioActivo.rol !== "SuperAdmin" && usuarioActivo.rol !== "Docente") {
+        crearToast("Acceso denegado: Solo Docente y Administrador pueden cambiar horarios", "danger");
         return;
     }
-    let modal = document.getElementById('modal-gestionar');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'modal-gestionar';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:11000;display:flex;align-items:center;justify-content:center;';
-        document.body.appendChild(modal);
-    }
-    const nombre = prod.nombre || prod.nombre_producto || id;
-    const stock = prod.stock || 0;
-    modal.innerHTML = `
-        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:380px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);">
-            <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:5px;">📦 Gestionar Stock</h2>
-            <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:20px;">${nombre}</p>
-            <div style="text-align:center;margin-bottom:20px;">
-                <p style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;">Stock Actual</p>
-                <p id="modal-stock-actual" style="font-size:2.5rem;font-weight:800;color:var(--primary);margin:5px 0;">${stock}</p>
-            </div>
-            <div style="display:flex;gap:10px;margin-bottom:15px;">
-                <button id="btn-modal-retirar" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#c0392b,#e74c3c);color:white;border:none;font-weight:700;font-size:1rem;cursor:pointer;box-shadow:0 5px 15px rgba(231,76,60,0.3);">- Retirar</button>
-                <button id="btn-modal-devolver" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#27ae60,#2ecc71);color:white;border:none;font-weight:700;font-size:1rem;cursor:pointer;box-shadow:0 5px 15px rgba(46,204,113,0.3);">+ Devolver</button>
-            </div>
-            <div class="input-group" style="margin-bottom:15px;">
-                <label style="font-size:0.8rem;">Cantidad</label>
-                <input type="number" id="modal-stock-cantidad" value="1" min="1" style="width:100%;padding:10px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);color:white;font-size:1rem;text-align:center;">
-            </div>
-            <button class="secondary-btn" onclick="document.getElementById('modal-gestionar').style.display='none'" style="width:100%;">Cerrar</button>
-        </div>
-    `;
-    modal.style.display = 'flex';
+    const ini = document.getElementById('inputHoraInicio').value;
+    const fin = document.getElementById('inputHoraFin').value;
+    await set(ref(db, 'configuracion/horario_iluminacion'), { inicio: ini, fin: fin });
+    crearToast("Horario de iluminacion guardado con exito", "success");
+});
 
-    document.getElementById('btn-modal-retirar').addEventListener('click', async () => {
-        if (!usuarioActivo) { mostrarAlertaAccesoDenegado(); return; }
-        const cant = parseInt(document.getElementById('modal-stock-cantidad').value) || 1;
-        const nuevoStock = Math.max(0, stock - cant);
-        try {
-            await update(ref(db, `inventario/${id}`), { stock: nuevoStock });
-            await push(ref(db, 'retiros'), {
-                producto_id: id,
-                nombre_producto: nombre,
-                cantidad_retirada: cant,
-                stock_anterior: stock,
-                stock_nuevo: nuevoStock,
-                usuario: usuarioActivo.usuario,
-                fecha: new Date().toLocaleString('es-ES')
-            });
-            await registrarAuditoria('Retiro Material', `Retirado ${cant}x ${nombre} (Stock: ${stock} -> ${nuevoStock})`);
-            crearToast(`[OK] ${cant} unidad(es) retirada(s). Stock: ${nuevoStock}`, 'success');
-            modal.style.display = 'none';
-        } catch (e) { console.error(e); crearToast('Error al retirar material.', 'danger'); }
-    });
-
-    document.getElementById('btn-modal-devolver').addEventListener('click', async () => {
-        if (!usuarioActivo) { mostrarAlertaAccesoDenegado(); return; }
-        const cant = parseInt(document.getElementById('modal-stock-cantidad').value) || 1;
-        const nuevoStock = stock + cant;
-        try {
-            await update(ref(db, `inventario/${id}`), { stock: nuevoStock });
-            await registrarAuditoria('Devolución Material', `Devuelto ${cant}x ${nombre} (Stock: ${stock} -> ${nuevoStock})`);
-            crearToast(`[OK] ${cant} unidad(es) devuelta(s). Stock: ${nuevoStock}`, 'success');
-            modal.style.display = 'none';
-        } catch (e) { console.error(e); crearToast('Error al devolver material.', 'danger'); }
-    });
-}
-
-// --- ALERTA: ACCESO DENEGADO (sin sesión) ---
-function mostrarAlertaAccesoDenegado() {
-    let toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.style.borderLeftColor = 'var(--danger)';
-    toast.innerHTML = '🔒 <strong>Acceso Denegado:</strong> Debe iniciar sesión para modificar el inventario.';
-    document.getElementById('toastContainer').appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 5000);
-    // Redirigir al login
-    const loginOverlay = document.getElementById('loginOverlay');
-    const dashboardContainer = document.querySelector('.dashboard-container');
-    if (loginOverlay) loginOverlay.style.display = 'flex';
-    if (dashboardContainer) dashboardContainer.style.display = 'none';
-}
-
-// --- FIREBASE: ACCESOS HISTÓRICOS ---
-onValue(ref(companionDb || db, 'accesos'), (snapshot) => {
-    listaAccesos.innerHTML = '';
-    const data = snapshot.val();
+onValue(ref(db, 'configuracion/horario_iluminacion'), (snap) => {
+    const data = snap.val();
     if (data) {
-        const entries = [];
-        snapshot.forEach(child => {
-            entries.push({ key: child.key, ...child.val() });
-        });
-        entries.reverse().forEach(acc => {
-            const tIngreso = acc.fecha_hora || acc.hora_ingreso || '--';
-            const metodo = acc.metodo || acc.metodo_acceso || 'rfid';
-            const metodoBadge = metodo.includes('RFID')
-                ? '<span class="badge badge-purple">[RFID] RFID</span>'
-                : '<span class="badge badge-blue">[CODIGO] Codigo</span>';
-            const exito = acc.exitoso !== undefined ? (acc.exitoso ? '<span class="badge badge-green">Exitoso</span>' : '<span class="badge badge-red">Denegado</span>') : '--';
-            const motivo = acc.motivo || acc.rol || '';
+        document.getElementById('inputHoraInicio').value = data.inicio || "06:30";
+        document.getElementById('inputHoraFin').value = data.fin || "22:00";
+    }
+});
 
+// --- ESTANTE SECURITY (FC-51 IR) ---
+const widgetCas1 = document.getElementById('widgetCasillero1');
+const widgetCas2 = document.getElementById('widgetCasillero2');
+const valCas1 = document.getElementById('valCasillero1');
+const valCas2 = document.getElementById('valCasillero2');
+const checkModoSeguro = document.getElementById('checkModoSeguro');
+const bannerEstante = document.getElementById('alertaEstanteBanner');
+
+onValue(ref(db, 'monitoreo/casillero1'), (snap) => {
+    const val = snap.val() || "SEGURO";
+    valCas1.innerText = val;
+    if (val === "ALERTA") {
+        widgetCas1.style.borderColor = "var(--danger)";
+        widgetCas1.style.background = "rgba(192, 57, 43, 0.08)";
+    } else {
+        widgetCas1.style.borderColor = "var(--success)";
+        widgetCas1.style.background = "";
+    }
+});
+
+onValue(ref(db, 'monitoreo/casillero2'), (snap) => {
+    const val = snap.val() || "SEGURO";
+    valCas2.innerText = val;
+    if (val === "ALERTA") {
+        widgetCas2.style.borderColor = "var(--danger)";
+        widgetCas2.style.background = "rgba(192, 57, 43, 0.08)";
+    } else {
+        widgetCas2.style.borderColor = "var(--success)";
+        widgetCas2.style.background = "";
+    }
+});
+
+onValue(ref(db, 'monitoreo/modo_seguro_estante'), (snap) => {
+    checkModoSeguro.checked = snap.val() || false;
+});
+
+checkModoSeguro.addEventListener('change', async () => {
+    if (usuarioActivo.rol !== "SuperAdmin" && usuarioActivo.rol !== "Docente") {
+        crearToast("Acceso denegado: Solo Docente y Administrador pueden modificar este modo", "danger");
+        checkModoSeguro.checked = !checkModoSeguro.checked;
+        return;
+    }
+    await set(ref(db, 'monitoreo/modo_seguro_estante'), checkModoSeguro.checked);
+    if (checkModoSeguro.checked) {
+        await set(ref(db, 'monitoreo/alerta_estante'), "");
+    }
+    crearToast(`Modo retiro seguro ${checkModoSeguro.checked ? "activado" : "desactivado"}`, "success");
+});
+
+onValue(ref(db, 'monitoreo/alerta_estante'), (snap) => {
+    const val = snap.val() || "";
+    if (val) {
+        bannerEstante.innerText = `ALERTA: ${val}`;
+        bannerEstante.style.display = "block";
+    } else {
+        bannerEstante.style.display = "none";
+    }
+});
+
+// --- INVENTARIO MANAGER ---
+let listCarreras = ["TAIPT", "TIRE", "TAI"];
+let listCategorias = ["Hardware", "Herramientas", "Accesorios", "Otros"];
+
+onValue(ref(db, 'configuracion/carreras'), (snap) => {
+    const data = snap.val();
+    if (data) {
+        listCarreras = Object.values(data);
+    }
+    actualizarDropdownsYListas();
+});
+
+onValue(ref(db, 'configuracion/categorias'), (snap) => {
+    const data = snap.val();
+    if (data) {
+        listCategorias = Object.values(data);
+    }
+    actualizarDropdownsYListas();
+});
+
+function actualizarDropdownsYListas() {
+    const comboCar = document.getElementById('invCarrera');
+    const comboCat = document.getElementById('invCategoria');
+    const uiCar = document.getElementById('listaAjustesCarreras');
+    const uiCat = document.getElementById('listaAjustesCategorias');
+
+    if (comboCar) {
+        comboCar.innerHTML = listCarreras.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+    if (comboCat) {
+        comboCat.innerHTML = listCategorias.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    if (uiCar) {
+        uiCar.innerHTML = listCarreras.map(c => `
+            <li style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid var(--glass-border);">
+                <span>${c}</span>
+                <button class="delete-btn" style="padding:2px 8px;" onclick="eliminarCarrera('${c}')">Eliminar</button>
+            </li>
+        `).join('');
+    }
+
+    if (uiCat) {
+        uiCat.innerHTML = listCategorias.map(c => `
+            <li style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid var(--glass-border);">
+                <span>${c}</span>
+                <button class="delete-btn" style="padding:2px 8px;" onclick="eliminarCategoria('${c}')">Eliminar</button>
+            </li>
+        `).join('');
+    }
+}
+
+// Add Career & Category
+document.getElementById('btnAgregarCarrera').addEventListener('click', async () => {
+    const val = document.getElementById('inputNuevaCarrera').value.trim().toUpperCase();
+    if (val && !listCarreras.includes(val)) {
+        await push(ref(db, 'configuracion/carreras'), val);
+        document.getElementById('inputNuevaCarrera').value = '';
+        crearToast("Carrera añadida", "success");
+    }
+});
+
+document.getElementById('btnAgregarCategoria').addEventListener('click', async () => {
+    const val = document.getElementById('inputNuevaCategoria').value.trim();
+    if (val && !listCategorias.includes(val)) {
+        await push(ref(db, 'configuracion/categorias'), val);
+        document.getElementById('inputNuevaCategoria').value = '';
+        crearToast("Categoria añadida", "success");
+    }
+});
+
+window.eliminarCarrera = async function(car) {
+    const snap = await get(ref(db, 'configuracion/carreras'));
+    if (snap.exists()) {
+        const data = snap.val();
+        const key = Object.keys(data).find(k => data[k] === car);
+        if (key) {
+            await remove(ref(db, `configuracion/carreras/${key}`));
+            crearToast("Carrera eliminada", "success");
+        }
+    }
+};
+
+window.eliminarCategoria = async function(cat) {
+    const snap = await get(ref(db, 'configuracion/categorias'));
+    if (snap.exists()) {
+        const data = snap.val();
+        const key = Object.keys(data).find(k => data[k] === cat);
+        if (key) {
+            await remove(ref(db, `configuracion/categorias/${key}`));
+            crearToast("Categoria eliminada", "success");
+        }
+    }
+};
+
+// Inventario Render
+let todosLosProductos = {};
+const invSearchInput = document.getElementById('invSearchInput');
+
+function renderInventario() {
+    listaInventario.innerHTML = '';
+    const query = invSearchInput.value.toLowerCase().trim();
+    
+    Object.keys(todosLosProductos).forEach(key => {
+        const prod = todosLosProductos[key];
+        const nombre = prod.nombre_producto || '—';
+        const carrera = prod.carrera || '—';
+        const categoria = prod.categoria || 'Otros';
+        const ubicacion = prod.ubicacion || '—';
+        const stock = prod.stock || 0;
+        const estado = prod.estado || 'Funcional';
+
+        if (query && !key.toLowerCase().includes(query) && !nombre.toLowerCase().includes(query)) {
+            return;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><span style="font-family:monospace; color:var(--primary); font-weight:700;">${key}</span></td>
+            <td><strong>${nombre}</strong></td>
+            <td>${carrera}</td>
+            <td>${categoria}</td>
+            <td>${ubicacion}</td>
+            <td><span class="badge ${stock > 0 ? 'badge-green' : 'badge-red'}">${stock} und</span></td>
+            <td><span class="badge ${estado === 'Funcional' ? 'badge-green' : estado === 'Regular' ? 'badge-orange' : 'badge-red'}">${estado}</span></td>
+            <td style="display:flex; gap:6px;">
+                <button class="edit-btn" onclick="editarProducto('${key}')">Editar</button>
+                <button class="delete-btn" onclick="eliminarProducto('${key}')">Eliminar</button>
+            </td>
+        `;
+        listaInventario.appendChild(tr);
+    });
+}
+
+invSearchInput.addEventListener('input', renderInventario);
+
+onValue(ref(db, 'inventario'), (snapshot) => {
+    todosLosProductos = snapshot.val() || {};
+    renderInventario();
+    renderQRAltaPanel();
+});
+
+// Add / Edit Product
+document.getElementById('btnAgregarInventario').addEventListener('click', async () => {
+    const id = document.getElementById('invId').value || 'PRD_' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const nombre = document.getElementById('invNombre').value.trim();
+    const ubic = document.getElementById('invUbicacion').value.trim();
+    const stock = parseInt(document.getElementById('invStock').value) || 0;
+    const carrera = document.getElementById('invCarrera').value;
+    const categoria = document.getElementById('invCategoria').value;
+    const estado = document.getElementById('invEstado').value;
+
+    if (!nombre) {
+        crearToast("Ingresa el nombre del producto", "danger");
+        return;
+    }
+
+    await set(ref(db, `inventario/${id}`), {
+        nombre_producto: nombre,
+        ubicacion: ubic,
+        stock: stock,
+        carrera: carrera,
+        categoria: categoria,
+        estado: estado
+    });
+
+    crearToast("Producto registrado", "success");
+    
+    // Clear Form
+    document.getElementById('invId').value = '';
+    document.getElementById('invNombre').value = '';
+    document.getElementById('invUbicacion').value = '';
+    document.getElementById('invStock').value = '';
+});
+
+window.editarProducto = function(id) {
+    const prod = todosLosProductos[id];
+    if (prod) {
+        document.getElementById('invId').value = id;
+        document.getElementById('invNombre').value = prod.nombre_producto || '';
+        document.getElementById('invUbicacion').value = prod.ubicacion || '';
+        document.getElementById('invStock').value = prod.stock || 0;
+        document.getElementById('invCarrera').value = prod.carrera || '';
+        document.getElementById('invCategoria').value = prod.categoria || '';
+        document.getElementById('invEstado').value = prod.estado || 'Funcional';
+        crearToast("Cargado en formulario", "info");
+    }
+};
+
+window.eliminarProducto = async function(id) {
+    if (confirm("¿Estás seguro de eliminar este producto?")) {
+        await remove(ref(db, `inventario/${id}`));
+        crearToast("Producto eliminado", "success");
+    }
+};
+
+// --- QR Alta Panel ---
+const qrSearch = document.getElementById('qrSearchInput');
+function renderQRAltaPanel() {
+    const grid = document.getElementById('labelsPrintGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const query = qrSearch.value.toLowerCase().trim();
+
+    Object.keys(todosLosProductos).forEach(key => {
+        const prod = todosLosProductos[key];
+        const nombre = prod.nombre_producto || '—';
+
+        if (query && !key.toLowerCase().includes(query) && !nombre.toLowerCase().includes(query)) {
+            return;
+        }
+
+        const div = document.createElement('div');
+        div.className = "printable-badge";
+        div.style.position = "relative";
+        div.innerHTML = `
+            <input type="checkbox" class="qr-print-check" data-id="${key}" style="position:absolute; top:10px; right:10px; width:20px; height:20px; cursor:pointer;">
+            <div class="badge-header">UCUENCA - SMART STOCK</div>
+            <div class="qr-preview-img" id="qr-container-${key}" style="padding:10px; background:white;"></div>
+            <div class="badge-footer">${key}</div>
+        `;
+        grid.appendChild(div);
+
+        // Generate QR code (CORRECT URL points to web domain)
+        setTimeout(() => {
+            const container = document.getElementById(`qr-container-${key}`);
+            if (container) {
+                new QRCode(container, {
+                    text: `https://smartstock.eu1.netbird.services/retiro.html?id=${key}`,
+                    width: 100,
+                    height: 100
+                });
+            }
+        }, 100);
+    });
+}
+
+qrSearch.addEventListener('input', renderQRAltaPanel);
+
+// Export QRs Selected to PDF (3x4 cm)
+document.getElementById('btnExportarPdfLabels').addEventListener('click', () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+        unit: 'mm',
+        format: [30, 40]
+    });
+
+    const checks = document.querySelectorAll('.qr-print-check:checked');
+    if (checks.length === 0) {
+        crearToast("Selecciona al menos un código QR para exportar", "danger");
+        return;
+    }
+
+    checks.forEach((chk, index) => {
+        const key = chk.dataset.id;
+        const container = document.getElementById(`qr-container-${key}`);
+        if (!container) return;
+        const imgEl = container.querySelector('img');
+        if (imgEl && imgEl.src) {
+            if (index > 0) doc.addPage([30, 40]);
+            doc.addImage(imgEl.src, 'PNG', 3, 2, 24, 24);
+            doc.setFontSize(6);
+            doc.setFont("courier", "bold");
+            doc.text(key, 15, 34, { align: 'center' });
+        }
+    });
+
+    doc.save(`etiquetas_seleccionadas.pdf`);
+    crearToast("PDF de etiquetas generado", "success");
+});
+
+// --- HISTORIAL DE MOVIMIENTOS ---
+let todosLosAccesos = [];
+let todosLosRetiros = [];
+const filtroFechaInput = document.getElementById('filtroFechaMovimientos');
+const btnLimpiarFiltro = document.getElementById('btnLimpiarFiltroFecha');
+
+function filtrarYRenderizarMovimientos() {
+    const fechaFiltro = filtroFechaInput.value; // YYYY-MM-DD
+    
+    // Render Accesos
+    listaAccesos.innerHTML = '';
+    const accesosFiltrados = todosLosAccesos.filter(acc => {
+        if (!fechaFiltro) return true;
+        // Parse acc.hora_ingreso (YYYY-MM-DD HH:MM:SS or DD/MM/YYYY)
+        const fechaAcc = acc.hora_ingreso || "";
+        if (fechaAcc.includes(fechaFiltro)) return true;
+        
+        // standard format check
+        try {
+            const dateParts = fechaAcc.split(" ")[0]; // YYYY-MM-DD
+            return dateParts === fechaFiltro;
+        } catch {
+            return false;
+        }
+    });
+
+    if (accesosFiltrados.length > 0) {
+        accesosFiltrados.forEach(acc => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${acc.docente || acc.nombre || '--'}</strong></td>
-                <td>${metodoBadge}</td>
-                <td><span style="color:var(--text-muted); font-size:0.85rem;">${motivo}</span></td>
-                <td>${tIngreso}</td>
-                <td>${acc.hora_salida || 'Activo'}</td>
-                <td>${acc.tiempo_permanencia_min ? acc.tiempo_permanencia_min + ' min' : '--'}</td>
-                <td><span style="font-weight:700;">${acc.acompanantes_al_ingresar || '--'}</span></td>
-                <td>${exito}</td>
+                <td><strong>${acc.docente}</strong></td>
+                <td><span class="badge badge-green">${acc.metodo_acceso}</span></td>
+                <td>${acc.rol || "Docente"}</td>
+                <td>${acc.hora_ingress || acc.hora_ingreso || "—"}</td>
+                <td>${acc.hora_salida || "—"}</td>
+                <td>${acc.tiempo_permanencia_min || 0} min</td>
+                <td>${acc.acompanantes_al_ingresar || 0}</td>
+                <td>${acc.saca_producto ? 'Sí' : 'No'}</td>
             `;
             listaAccesos.appendChild(tr);
         });
     } else {
-        listaAccesos.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No hay registros de acceso.</td></tr>';
+        listaAccesos.innerHTML = '<tr><td colspan="8">Sin accesos registrados para esta fecha.</td></tr>';
     }
+
+    // Render Retiros
+    listaRetiros.innerHTML = '';
+    const retirosFiltrados = todosLosRetiros.filter(ret => {
+        if (!fechaFiltro) return true;
+        // ret.fecha is DD/MM/YYYY HH:MM:SS or similar.
+        // Let's convert YYYY-MM-DD to DD/MM/YYYY to compare
+        const parts = fechaFiltro.split("-");
+        const formatEs = `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+        return ret.fecha && ret.fecha.includes(formatEs);
+    });
+
+    if (retirosFiltrados.length > 0) {
+        retirosFiltrados.forEach(ret => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${ret.nombre_producto}</strong></td>
+                <td>${ret.producto_id}</td>
+                <td>${ret.cantidad_retirada}</td>
+                <td>${ret.stock_anterior}</td>
+                <td>${ret.stock_nuevo}</td>
+                <td>${ret.usuario}</td>
+                <td>${ret.fecha}</td>
+            `;
+            listaRetiros.appendChild(tr);
+        });
+    } else {
+        listaRetiros.innerHTML = '<tr><td colspan="7">Sin retiros registrados para esta fecha.</td></tr>';
+    }
+}
+
+if (filtroFechaInput) {
+    filtroFechaInput.addEventListener('change', filtrarYRenderizarMovimientos);
+}
+if (btnLimpiarFiltro) {
+    btnLimpiarFiltro.addEventListener('click', () => {
+        filtroFechaInput.value = '';
+        filtrarYRenderizarMovimientos();
+    });
+}
+
+onValue(ref(db, 'accesos'), (snapshot) => {
+    todosLosAccesos = [];
+    const data = snapshot.val();
+    if (data) {
+        todosLosAccesos = Object.values(data).reverse();
+    }
+    filtrarYRenderizarMovimientos();
 });
 
-// --- FIREBASE: GESTIÓN DE USUARIOS RFID (NUESTRA DB) ---
+onValue(ref(db, 'retiros'), (snapshot) => {
+    todosLosRetiros = [];
+    const data = snapshot.val();
+    if (data) {
+        todosLosRetiros = Object.values(data).reverse();
+    }
+    filtrarYRenderizarMovimientos();
+});
+
+// --- PERSONAL RFID AND WEB PLATAFORMA ---
 onValue(ref(db, 'usuarios'), (snapshot) => {
     listaUsuarios.innerHTML = '';
     const data = snapshot.val();
     if (data) {
-        Object.keys(data).filter(key => {
-            const r = (data[key].rol || '').toLowerCase();
-            return r === 'docente' || r === 'operador';
-        }).forEach(key => {
-            const user = data[key];
+        Object.keys(data).forEach(key => {
+            const usr = data[key];
             const tr = document.createElement('tr');
-            const nombreDocente = user.nombre || '';
             tr.innerHTML = `
-                <td><span style="font-family:monospace; color:var(--accent); font-weight:700;">${key}</span></td>
-                <td><strong>${nombreDocente}</strong></td>
-                <td>${user.rol}</td>
-                <td><span style="font-size:0.8rem; color:var(--text-muted);">${user.correo || '---'}</span></td>
-                <td><button class="qr-btn" data-nombre="${nombreDocente}" style="padding:5px 10px; background:rgba(109,184,122,0.15); border:1px solid rgba(109,184,122,0.3); color:var(--success); border-radius:8px; font-weight:600; cursor:pointer; font-size:0.75rem;">Ver</button></td>
-                <td style="display:flex; gap:6px; flex-wrap:wrap;">
-                    <button class="edit-btn" data-uid="${key}">Editar</button>
-                    <button class="delete-btn" data-uid="${key}">Eliminar</button>
+                <td><span style="font-family:monospace; font-weight:700;">${key}</span></td>
+                <td><strong>${usr.nombre}</strong></td>
+                <td>${usr.rol}</td>
+                <td>${usr.correo}</td>
+                <td>
+                    <button class="delete-btn" onclick="eliminarUsuarioRFID('${key}')">Eliminar</button>
                 </td>
             `;
-            tr.querySelector('.qr-btn').addEventListener('click', () => mostrarActividadDocente(nombreDocente));
-            tr.querySelector('.delete-btn').addEventListener('click', (e) => {
-                const uid = e.currentTarget.dataset.uid;
-                if (confirm(`¿Estás seguro de revocar el acceso a ${user.nombre}?`)) {
-                    remove(ref(db, `usuarios/${uid}`))
-                        .then(() => {
-                            registrarAuditoria('Eliminación Docente', `Docente eliminado: ${user.nombre} (UID: ${uid})`);
-                            crearToast('Usuario eliminado correctamente.', 'success');
-                        })
-                        .catch(err => alert('Error al eliminar: ' + err));
-                }
-            });
-            tr.querySelector('.edit-btn').addEventListener('click', () => {
-                cargarFormularioDocente(key, user);
-            });
             listaUsuarios.appendChild(tr);
         });
-    } else {
-        listaUsuarios.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No hay docentes registrados en la base de datos.</td></tr>';
     }
 });
 
-// --- FIREBASE: GESTIÓN DE USUARIOS DE PLATAFORMA ---
-let editingWebUserId = null;
+btnGuardarUsuario.addEventListener('click', async () => {
+    const uid = userUid.value.trim();
+    const nom = userNombre.value.trim();
+    const rol = userRol.value;
+    const corr = userCorreo.value.trim();
+    if (!uid || !nom) {
+        crearToast("UID y Nombre son obligatorios", "danger");
+        return;
+    }
+    await set(ref(db, `usuarios/${uid}`), { nombre: nom, rol: rol, correo: corr });
+    crearToast("Tarjeta RFID autorizada", "success");
+    userUid.value = '';
+    userNombre.value = '';
+    userCorreo.value = '';
+});
 
+window.eliminarUsuarioRFID = async function(uid) {
+    if (confirm("¿Eliminar acceso a este docente?")) {
+        await remove(ref(db, `usuarios/${uid}`));
+        crearToast("Acceso revocado", "success");
+    }
+};
+
+// Web Users
 onValue(ref(db, 'usuarios_sistema'), (snapshot) => {
-    if (!listaUsuariosWeb) return;
     listaUsuariosWeb.innerHTML = '';
     const data = snapshot.val();
     if (data) {
         Object.keys(data).forEach(key => {
-            const user = data[key];
+            const usr = data[key];
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><span style="font-family:monospace; color:var(--primary); font-weight:700;">${user.id_operador || '---'}</span></td>
-                <td><strong>${user.usuario}</strong></td>
-                <td><span style="font-size:0.8rem; color:var(--text-muted);">${user.correo || '---'}</span></td>
-                <td><span class="badge badge-purple">${user.rol}</span></td>
-                <td style="display:flex; gap:6px; flex-wrap:wrap;">
-                    <button class="edit-btn" data-key="${key}">Editar</button>
-                    <button class="delete-btn" data-key="${key}">Eliminar</button>
+                <td><span style="font-family:monospace; font-weight:700;">${usr.id_operador || "—"}</span></td>
+                <td><strong>${usr.usuario}</strong></td>
+                <td>${usr.correo}</td>
+                <td><span class="badge badge-green">${usr.rol}</span></td>
+                <td>
+                    <button class="delete-btn" onclick="eliminarUsuarioWeb('${key}')">Eliminar</button>
                 </td>
             `;
-            tr.querySelector('.delete-btn').addEventListener('click', (e) => {
-                const k = e.currentTarget.dataset.key;
-                if (usuarioActivo && usuarioActivo.usuario === user.usuario) {
-                    alert("No puedes eliminar el usuario con el que has iniciado sesión actualmente.");
-                    return;
-                }
-                if (confirm(`¿Estás seguro de eliminar el usuario de plataforma ${user.usuario}?`)) {
-                    remove(ref(db, `usuarios_sistema/${k}`))
-                        .then(() => {
-                            registrarAuditoria('Eliminación Usuario Plataforma', `Usuario eliminado: ${user.usuario} (ID Operador: ${user.id_operador})`);
-                            crearToast('Usuario de plataforma eliminado.', 'success');
-                        })
-                        .catch(err => alert('Error al eliminar: ' + err));
-                }
-            });
-            tr.querySelector('.edit-btn').addEventListener('click', () => {
-                cargarFormularioWebUsuario(key, user);
-            });
             listaUsuariosWeb.appendChild(tr);
         });
-    } else {
-        listaUsuariosWeb.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No hay usuarios de plataforma registrados.</td></tr>';
     }
 });
 
-function cargarFormularioWebUsuario(key, user) {
-    if (!webUserOperatorId) return;
-    webUserOperatorId.value = user.id_operador || '';
-    webUserOperatorId.readOnly = true;
-    webUserOperatorId.style.background = "rgba(0,0,0,0.2)";
-    webUserOperatorId.style.cursor = "not-allowed";
+btnGuardarWebUsuario.addEventListener('click', async () => {
+    const op = webUserOperatorId.value.trim();
+    const usr = webUserUsername.value.trim();
+    const pass = webUserPassword.value.trim();
+    const corr = webUserCorreo.value.trim();
+    const rol = webUserRol.value;
 
-    webUserUsername.value = user.usuario || '';
-    webUserPassword.value = user.passwordWeb || '';
-    webUserCorreo.value = user.correo || '';
-    webUserRol.value = user.rol || 'Operador';
-
-    webUserFormTitle.textContent = "Editar Usuario Web";
-    btnGuardarWebUsuario.textContent = "Guardar Cambios";
-    editingWebUserId = key;
-
-    // Scroll smoothly
-    webUserOperatorId.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
-}
-
-if (btnGuardarWebUsuario) {
-    btnGuardarWebUsuario.addEventListener('click', async () => {
-        const opId = webUserOperatorId.value.trim();
-        const username = webUserUsername.value.trim();
-        const password = webUserPassword.value.trim();
-        const correo = webUserCorreo.value.trim();
-        const rol = webUserRol.value;
-
-        if (!opId || !username || !password || !correo) {
-            alert('Por favor, completa todos los campos del formulario.');
-            return;
-        }
-        if (!validarEmail(correo)) {
-            alert('El correo electrónico no tiene un formato válido.');
-            return;
-        }
-
-        try {
-            if (editingWebUserId) {
-                // Modo Edición
-                await update(ref(db, `usuarios_sistema/${editingWebUserId}`), {
-                    usuario: username,
-                    passwordWeb: password,
-                    correo: correo,
-                    rol: rol
-                });
-
-                await registrarAuditoria('Edición Usuario Plataforma', `Usuario editado: ${username} (ID: ${opId})`);
-                crearToast(`[Edit] Usuario ${username} actualizado con éxito`, "success");
-
-                // Reset state
-                editingWebUserId = null;
-                webUserOperatorId.readOnly = false;
-                webUserOperatorId.style.background = "";
-                webUserOperatorId.style.cursor = "";
-                webUserFormTitle.textContent = "Registrar Nuevo Usuario Web";
-                btnGuardarWebUsuario.textContent = "Registrar Usuario Web";
-            } else {
-                // Modo Agregar
-                // Check duplicate operator ID or username first
-                const snapshot = await get(ref(db, 'usuarios_sistema'));
-                let exists = false;
-                if (snapshot.exists()) {
-                    const users = snapshot.val();
-                    Object.keys(users).forEach(k => {
-                        if (users[k].id_operador === opId || users[k].usuario === username) {
-                            exists = true;
-                        }
-                    });
-                }
-                if (exists) {
-                    alert("Error: El ID de Operador o Nombre de Usuario ya existe.");
-                    return;
-                }
-
-                // Generar un ID del nodo basado en username o push
-                const finalKey = username.toLowerCase();
-                const hashedPass = await sha256(password);
-                await set(ref(db, `usuarios_sistema/${finalKey}`), {
-                    id_operador: opId,
-                    usuario: username,
-                    passwordWeb: password,
-                    passwordHash: hashedPass,
-                    correo: correo,
-                    rol: rol
-                });
-
-                await registrarAuditoria('Registro Usuario Plataforma', `Usuario registrado: ${username} (ID: ${opId})`);
-                crearToast(`[OK] Usuario ${username} registrado con éxito`, "success");
-            }
-
-            // Limpiar formulario
-            webUserOperatorId.value = '';
-            webUserUsername.value = '';
-            webUserPassword.value = '';
-            webUserCorreo.value = '';
-            webUserRol.value = 'Operador';
-
-        } catch (e) {
-            console.error(e);
-            alert("Error al guardar usuario web.");
-        }
-    });
-}
-
-// --- FUNCIÓN: EDITAR USUARIO (UID BLOQUEADO) ---
-let editingDocenteUid = null;
-
-function validarEmail(email) {
-    const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return re.test(email);
-}
-
-function generarUsuarioWeb(nombre) {
-    if (!nombre) return "docente_" + Math.floor(1000 + Math.random() * 9000);
-    const clean = nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, "");
-    const parts = clean.split(" ");
-    if (parts.length >= 2) {
-        return parts[0] + parts[1].substring(0, 3) + Math.floor(10 + Math.random() * 90);
-    }
-    return parts[0] + Math.floor(10 + Math.random() * 90);
-}
-
-function generarPasswordTemporal() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-function cargarFormularioDocente(uid, user) {
-    userUid.value = uid;
-    userUid.readOnly = true;
-    userUid.style.background = "rgba(0,0,0,0.2)";
-    userUid.style.cursor = "not-allowed";
-    userNombre.value = user.nombre;
-    userRol.value = user.rol;
-    document.getElementById('userCorreo').value = user.correo || '';
-    btnGuardarUsuario.textContent = "Guardar Cambios";
-    editingDocenteUid = uid;
-
-    // Scroll smoothly to form
-    userUid.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
-}
-
-// --- ACCIÓN: REGISTRAR/EDITAR USUARIO RFID ---
-btnGuardarUsuario.addEventListener('click', async () => {
-    const uid = userUid.value.trim();
-    const nombre = userNombre.value.trim();
-    const rol = userRol.value.trim();
-    const correoInput = document.getElementById('userCorreo');
-    const correo = correoInput ? correoInput.value.trim() : '';
-
-    if (!uid || !nombre || !rol || !correo) {
-        alert('Por favor, completa todos los campos del docente incluyendo el Correo.');
+    if (!op || !usr || !pass) {
+        crearToast("ID, usuario y contraseña son requeridos", "danger");
         return;
     }
-    if (!validarEmail(correo)) {
-        alert('El correo electrónico no tiene un formato válido.');
+    await set(ref(db, `usuarios_sistema/${usr}`), {
+        id_operador: op,
+        usuario: usr,
+        passwordWeb: pass,
+        correo: corr,
+        rol: rol
+    });
+    crearToast("Usuario registrado con éxito", "success");
+    webUserOperatorId.value = '';
+    webUserUsername.value = '';
+    webUserPassword.value = '';
+    webUserCorreo.value = '';
+});
+
+window.eliminarUsuarioWeb = async function(username) {
+    if (username === "admin") {
+        crearToast("No se puede eliminar al administrador principal", "danger");
         return;
     }
-
-    btnGuardarUsuario.disabled = true;
-    const originalText = btnGuardarUsuario.textContent;
-    btnGuardarUsuario.textContent = "Procesando...";
-
-    try {
-        if (editingDocenteUid) {
-            // Edit Mode
-            await update(ref(db, 'usuarios/' + editingDocenteUid), {
-                nombre: nombre,
-                rol: rol,
-                correo: correo
-            });
-
-            await registrarAuditoria('Edición Docente', `Docente editado: ${nombre} (UID: ${editingDocenteUid})`);
-            crearToast(`[Edit] Docente ${editingDocenteUid} actualizado correctamente.`, 'success');
-
-            // Reset Edit state
-            editingDocenteUid = null;
-            userUid.readOnly = false;
-            userUid.style.background = "";
-            userUid.style.cursor = "";
-            btnGuardarUsuario.textContent = "Autorizar Tarjeta RFID";
-        } else {
-            // Add Mode
-            const userWeb = generarUsuarioWeb(nombre);
-            const passWeb = generarPasswordTemporal();
-
-            await set(ref(db, 'usuarios/' + uid), {
-                nombre: nombre,
-                rol: rol,
-                uid: uid,
-                correo: correo,
-                usuarioWeb: userWeb,
-                passwordWeb: passWeb
-            });
-
-            // Clean unregistered UID in Firebase
-            await set(ref(db, 'ultimo_uid_no_registrado'), null);
-
-            // Send welcome email with credentials using SMTPJS (resilient)
-            await enviarCorreoConFallback({
-                Host: "smtp.gmail.com",
-                Username: "smartstock97@gmail.com",
-                Password: "F@jardo123",
-                To: correo,
-                From: "smartstock97@gmail.com",
-                Subject: "Bienvenido a Smart Stock - Credenciales de Acceso",
-                Body: `Estimado/a ${nombre},\n\nLe damos la bienvenida al sistema Smart Stock. Se ha registrado su tarjeta RFID con éxito.\n\nSus credenciales de acceso para el dashboard web son:\n- Usuario: ${userWeb}\n- Contraseña Temporal: ${passWeb}\n\nPor favor, conserve estas credenciales de forma segura.\n\nAtentamente,\nSmart Stock System`
-            });
-
-            await registrarAuditoria('Registro Docente', `Docente registrado: ${nombre} (UID: ${uid})`);
-            crearToast('[OK] Docente autorizado y credenciales enviadas por correo.', 'success');
-        }
-
-        // Clear fields
-        userUid.value = '';
-        userNombre.value = '';
-        userRol.value = '';
-        if (correoInput) correoInput.value = '';
-    } catch (e) {
-        console.error(e);
-        alert('Error al guardar datos o enviar correo.');
-    } finally {
-        btnGuardarUsuario.disabled = false;
-        if (!editingDocenteUid) btnGuardarUsuario.textContent = "Autorizar Tarjeta RFID";
+    if (confirm(`¿Eliminar cuenta web de ${username}?`)) {
+        await remove(ref(db, `usuarios_sistema/${username}`));
+        crearToast("Cuenta web eliminada", "success");
     }
-});
+};
 
-// --- LÓGICA: GENERAR QR E INVENTARIO ---
-// [QR legacy form removed — now handled by btnAgregarInventario in the inventory panel]
-
-
-// --- ACCIÓN: SEED DATA (INYECTAR DATOS SEMILLA) ---
-if (btnSeedData) btnSeedData.addEventListener('click', async () => {
-    if (!confirm('¿Deseas inyectar datos de prueba en tu base de datos Firebase? Esto llenará los sensores, inventarios y docentes modelo para demostración.')) {
-        return;
-    }
-
-    try {
-        const seedData = {
-            // Sincronizar estado monitoreo
-            'monitoreo': {
-                personas_dentro_actualmente: 2,
-                estado_chapa: "CERRADA",
-                alerta_pir: false,
-                estado_foco: "ENCENDIDO"
-            },
-            // Semilla de Usuarios RFID autorizados
-            'usuarios': {
-                '12345678': {
-                    nombre: 'Ing. Esteban Bravo',
-                    rol: 'Técnico de Laboratorio'
-                },
-                '238472910': {
-                    nombre: 'Dr. Marcelo Vásquez',
-                    rol: 'Docente de Electrónica'
-                },
-                '928374829': {
-                    nombre: 'Dra. Jomayra Valdez',
-                    rol: 'Docente Investigadora'
-                }
-            },
-            // Semilla de Inventario
-            'inventario': {
-                'QR_OSCILOSCOPIO_1': {
-                    nombre_producto: 'Osciloscopio Digital Rigol DS1054Z 50MHz',
-                    stock: 4
-                },
-                'QR_MULTIMETRO_2': {
-                    nombre_producto: 'Multímetro Digital Fluke 115 True-RMS',
-                    stock: 12
-                },
-                'QR_GENERADOR_3': {
-                    nombre_producto: 'Generador de Funciones Arbitrarias GW Instek',
-                    stock: 3
-                }
-            },
-            // Semilla de Accesos
-            'accesos': {
-                '-Kaccess_01': {
-                    docente: 'Dr. Marcelo Vásquez',
-                    rol: 'Docente de Electrónica',
-                    hora_ingreso: '2026-05-31 16:30:00',
-                    hora_salida: '2026-05-31 18:00:00',
-                    tiempo_permanencia_min: 90,
-                    acompanantes_al_ingresar: 5,
-                    saca_producto: true,
-                    producto_extraido_id: 'QR_OSCILOSCOPIO_1'
-                },
-                '-Kaccess_02': {
-                    docente: 'Dra. Jomayra Valdez',
-                    rol: 'Docente Investigadora',
-                    hora_ingreso: '2026-05-31 14:15:00',
-                    hora_salida: '2026-05-31 15:45:00',
-                    tiempo_permanencia_min: 90,
-                    acompanantes_al_ingresar: 0,
-                    saca_producto: false,
-                    producto_extraido_id: ''
-                }
-            }
-        };
-
-        await update(ref(db), seedData);
-        alert('[!] Base de datos inicializada con éxito. ¡Ya puedes navegar por el dashboard para ver el sistema en acción!');
-    } catch (e) {
-        console.error(e);
-        alert('Error al inyectar datos semilla: ' + e.message);
-    }
-});
-
-// --- FUNCIÓN: MOSTRAR ACTIVIDAD DE UN DOCENTE ---
-function mostrarActividadDocente(nombreDocente) {
-    let modal = document.getElementById('actividad-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'actividad-modal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:12000;display:flex;align-items:center;justify-content:center;';
-        document.body.appendChild(modal);
-    }
-    modal.innerHTML = `
-        <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:500px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);max-height:80vh;overflow-y:auto;">
-            <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:5px;">[Lista] Actividad de ${nombreDocente}</h2>
-            <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:20px;">Últimas acciones registradas en el sistema</p>
-            <div id="actividad-list" style="display:flex;flex-direction:column;gap:10px;">
-                <p style="color:var(--text-muted);text-align:center;padding:20px;">Cargando...</p>
-            </div>
-            <button class="secondary-btn" onclick="document.getElementById('actividad-modal').style.display='none'" style="margin-top:15px;">Cerrar</button>
-        </div>
-    `;
-    modal.style.display = 'flex';
-
-    // Load audit data for this user
-    get(ref(db, 'auditoria')).then(snapshot => {
-        const list = document.getElementById('actividad-list');
-        if (!list) return;
-        list.innerHTML = '';
-        const data = snapshot.val();
-        if (data) {
-            const entries = Object.values(data)
-                .filter(e => e.usuario === nombreDocente || (e.detalles && e.detalles.includes(nombreDocente)))
-                .reverse()
-                .slice(0, 20);
-            if (entries.length === 0) {
-                list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sin actividad registrada.</p>';
-                return;
-            }
-            entries.forEach(entry => {
-                const div = document.createElement('div');
-                div.style.cssText = 'padding:10px 14px;background:rgba(0,0,0,0.2);border-radius:10px;border:1px solid var(--glass-border);';
-                div.innerHTML = `
-                    <p style="font-size:0.8rem;font-weight:600;color:var(--text-main);">${entry.accion || '—'}</p>
-                    <p style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${entry.detalles || ''}</p>
-                    <p style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;font-family:monospace;">${entry.timestamp || ''}</p>
-                `;
-                list.appendChild(div);
-            });
-        } else {
-            list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sin actividad registrada.</p>';
-        }
-    });
-}
-
-// --- FUNCIÓN: CAMBIAR CONTRASEÑA ---
-// (Se invoca desde el panel de perfil)
-function agregarBotonCambiarContrasena() {
-    const btnCerrar = document.getElementById('btnCerrarSesion');
-    if (!btnCerrar) return;
-
-    const btnCambiar = document.createElement('button');
-    btnCambiar.className = 'primary-btn';
-    btnCambiar.id = 'btnCambiarPass';
-    btnCambiar.style.cssText = 'margin-top:10px;background:linear-gradient(135deg,#2980b9,#3498db);box-shadow:0 5px 15px rgba(52,152,219,0.3);';
-    btnCambiar.innerHTML = '[Key] Cambiar Contraseña';
-    btnCambiar.addEventListener('click', () => {
-        let modal = document.getElementById('change-pass-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'change-pass-modal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(7,10,19,0.85);backdrop-filter:blur(15px);z-index:12000;display:flex;align-items:center;justify-content:center;';
-            document.body.appendChild(modal);
-        }
-        modal.innerHTML = `
-            <div class="glass-panel" style="background:var(--glass-bg);padding:30px;border-radius:24px;max-width:380px;width:95%;border:1px solid var(--glass-border);box-shadow:0 20px 50px rgba(0,0,0,0.6);">
-                <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:20px;">[Key] Cambiar Contraseña</h2>
-                <div class="input-group"><label>Contraseña Actual</label><input type="password" id="oldPass" placeholder="••••••••"></div>
-                <div class="input-group"><label>Nueva Contraseña</label><input type="password" id="newPass" placeholder="••••••••"></div>
-                <div class="input-group"><label>Confirmar Nueva Contraseña</label><input type="password" id="confirmPass" placeholder="••••••••"></div>
-                <button class="primary-btn" id="btnConfirmarPass">Actualizar Contraseña</button>
-                <button class="secondary-btn" onclick="document.getElementById('change-pass-modal').style.display='none'" style="margin-top:8px;">Cancelar</button>
-            </div>
-        `;
-        modal.style.display = 'flex';
-
-        document.getElementById('btnConfirmarPass').addEventListener('click', async () => {
-            const oldP = document.getElementById('oldPass').value.trim();
-            const newP = document.getElementById('newPass').value.trim();
-            const confP = document.getElementById('confirmPass').value.trim();
-
-            if (!oldP || !newP || !confP) { alert('Completa todos los campos.'); return; }
-            if (oldP !== usuarioActivo.passwordWeb) { alert('La contraseña actual es incorrecta.'); return; }
-            if (newP !== confP) { alert('Las nuevas contraseñas no coinciden.'); return; }
-            if (newP.length < 4) { alert('La nueva contraseña debe tener al menos 4 caracteres.'); return; }
-
-            try {
-                const hashedNewPass = await sha256(newP);
-                await update(ref(db, `usuarios_sistema/${usuarioActivo.usuario}`), { passwordWeb: newP, passwordHash: hashedNewPass });
-                usuarioActivo.passwordWeb = newP;
-                modal.style.display = 'none';
-                crearToast('[OK] Contraseña actualizada correctamente.', 'success');
-                await registrarAuditoria('Cambio de Contraseña', 'El usuario cambió su contraseña.');
-            } catch (e) {
-                console.error(e);
-                alert('Error al actualizar la contraseña.');
-            }
-        });
-    });
-    btnCerrar.parentNode.insertBefore(btnCambiar, btnCerrar);
-}
-
-// Inicializar botón de cambiar contraseña al cargar
-agregarBotonCambiarContrasena();
-
-// --- SISTEMA DE ALERTA DE SEGURIDAD CRÍTICA Y AUDIO ---
-
-
-function playAlarmSound() {
-    try {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
-
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        osc.type = 'sawtooth';
-        // Frecuencia alternante para efecto sirena
-        const freq = (new Date().getSeconds() % 2 === 0) ? 988 : 659; // B5 o E5
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-        gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
-        console.warn("No se pudo reproducir el sonido de la alarma: ", e);
-    }
-}
-
-function iniciarAlarmaSonora() {
-    if (!beepInterval) {
-        playAlarmSound();
-        beepInterval = setInterval(playAlarmSound, 600);
-    }
-}
-
-function detenerAlarmaSonora() {
-    if (beepInterval) {
-        clearInterval(beepInterval);
-        beepInterval = null;
-    }
-}
-
-function mostrarAlertaCritica(mensaje) {
-    let alertBanner = document.getElementById('critical-alert-banner');
-    if (!alertBanner) {
-        alertBanner = document.createElement('div');
-        alertBanner.id = 'critical-alert-banner';
-        alertBanner.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(15, 7, 23, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 2px solid var(--danger);
-            color: var(--text-main);
-            padding: 18px 32px;
-            border-radius: 16px;
-            box-shadow: 0 20px 50px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.2);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            font-weight: 700;
-            font-size: 1.05rem;
-            animation: alertBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, alertFlash 1s infinite alternate;
-        `;
-
-        if (!document.getElementById('critical-alert-styles')) {
-            const styles = document.createElement('style');
-            styles.id = 'critical-alert-styles';
-            styles.innerHTML = `
-                @keyframes alertBounce {
-                    from { transform: translate(-50%, -100px); opacity: 0; }
-                    to { transform: translate(-50%, 0); opacity: 1; }
-                }
-                @keyframes alertFlash {
-                    0% { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
-                    100% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 10px 50px rgba(239, 68, 68, 0.6), 0 0 20px rgba(239, 68, 68, 0.4); }
-                }
-            `;
-            document.head.appendChild(styles);
-        }
-
-        alertBanner.innerHTML = `
-            <span style="font-size: 1.6rem; animation: iconShake 0.5s infinite;">[!]</span>
-            <div style="display: flex; flex-direction: column;">
-                <span style="letter-spacing: 1px; text-transform: uppercase; font-size: 0.75rem; color: var(--danger); font-weight: 800;">ALERTA DE SEGURIDAD CRÍTICA</span>
-                <span id="critical-alert-text">${mensaje}</span>
-            </div>
-        `;
-        document.body.appendChild(alertBanner);
-    } else {
-        document.getElementById('critical-alert-text').innerText = mensaje;
-    }
-
-    iniciarAlarmaSonora();
-}
-
-function detenerAlertaCritica() {
-    const alertBanner = document.getElementById('critical-alert-banner');
-    if (alertBanner) {
-        alertBanner.remove();
-    }
-    detenerAlarmaSonora();
-}
-
-// --- ESCUCHAR ULTIMO UID NO REGISTRADO (REGISTRO RÁPIDO RFID) ---
-onValue(ref(db, 'ultimo_uid_no_registrado'), (snapshot) => {
-    const uidNoReg = snapshot.val();
-    const userUidInput = document.getElementById('userUid');
-    if (!userUidInput) return;
-
-    const formContainer = userUidInput.closest('.form-container');
-    if (!formContainer) return;
-
-    if (uidNoReg) {
-        // Pre-rellenar UID no registrado y bloquear campo
-        userUidInput.value = uidNoReg;
-        userUidInput.disabled = true;
-
-        // Destacar visualmente el formulario en el panel de Gestión de Docentes
-        formContainer.style.border = '2px solid var(--accent)';
-        formContainer.style.boxShadow = '0 0 35px var(--accent-glow)';
-
-        // Mostrar alerta/indicador superior
-        mostrarAlertaCritica(`Tarjeta RFID no registrada detectada: ${uidNoReg}. Proceda a registrar el docente.`);
-    } else {
-        // Desbloquear y restaurar
-        userUidInput.value = '';
-        userUidInput.disabled = false;
-        formContainer.style.border = '';
-        formContainer.style.boxShadow = '';
-    }
-});
-
-// --- FUNCIÓN: GENERAR Y MOSTRAR MODAL QR ---
-function mostrarModalQR(idProd, nombreProd) {
-    let modal = document.getElementById('qr-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'qr-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(7, 10, 19, 0.85);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            z-index: 11000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        `;
-
-        modal.innerHTML = `
-            <div class="glass-panel" style="background:var(--glass-bg); padding:30px; border-radius:24px; text-align:center; max-width:320px; border:1px solid var(--glass-border); box-shadow: 0 20px 50px rgba(0,0,0,0.6);">
-                <h3 style="margin-bottom:10px; font-size:1.2rem; color:var(--text-main); font-weight:700;">Etiqueta QR</h3>
-                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:20px;" id="modal-product-name"></p>
-                <div class="printable-badge" style="background:white; color:#0f172a; padding:20px; border-radius:12px; border:3px solid #0f172a; display:inline-block; margin-bottom:20px;">
-                    <div class="badge-header" style="font-size:0.65rem; font-weight:900; letter-spacing:0.5px; margin-bottom:12px; text-transform:uppercase; border-bottom:1.5px solid #0f172a; padding-bottom:4px; width:100%; color:#0f172a;">UCUENCA - INVENTARIO IOT</div>
-                    <div id="modal-qr-preview" style="background:white; padding:5px; display:flex; align-items:center; justify-content:center;"></div>
-                    <div class="badge-footer" style="margin-top:10px; width:100%;">
-                        <span id="modal-qr-label" style="font-family:monospace; font-size:0.85rem; font-weight:800; background:#f1f5f9; padding:4px 8px; border-radius:4px; display:block; word-break:break-all; border:1px dashed #64748b; color:#0f172a;"></span>
-                    </div>
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <button class="primary-btn" id="modal-btn-print" style="padding:10px 20px; flex:1;">[Print] Imprimir</button>
-                    <button class="secondary-btn" id="modal-btn-close" style="margin-top:0; padding:10px 20px; flex:1;">Cerrar</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-
-    document.getElementById('modal-product-name').innerText = nombreProd;
-    document.getElementById('modal-qr-label').innerText = idProd;
-
-    // Generar URL del servidor dinámica para escaneo móvil
-    const qrUrl = `${window.location.origin}/bodega/escanear?id=${idProd}`;
-
-    const qrContainer = document.getElementById('modal-qr-preview');
-    qrContainer.innerHTML = '';
-
-    if (typeof QRCode !== 'undefined') {
-        new QRCode(qrContainer, {
-            text: qrUrl,
-            width: 140,
-            height: 140,
-            colorDark: "#0f172a",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
-    } else {
-        qrContainer.innerHTML = `<p style="color:#0f172a;font-size:0.75rem;padding:10px;font-weight:600;">Librería QR no cargada.<br><a href="${qrUrl}" target="_blank" style="color:var(--primary);">${qrUrl}</a></p>`;
-    }
-
-    modal.style.display = 'flex';
-
-    document.getElementById('modal-btn-close').onclick = () => {
-        modal.style.display = 'none';
-    };
-
-    document.getElementById('modal-btn-print').onclick = () => {
-        const printContent = modal.querySelector('.printable-badge').outerHTML;
-        const printWindow = window.open('', '', 'height=500,width=500');
-        printWindow.document.write('<html><head><title>Imprimir QR</title>');
-        printWindow.document.write('<style>');
-        printWindow.document.write('body { display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: monospace; }');
-        printWindow.document.write('.printable-badge { background: white; color: #000; padding: 20px; border: 3px solid #000; border-radius: 12px; width: 220px; text-align: center; }');
-        printWindow.document.write('.badge-header { font-size: 10px; font-weight: bold; margin-bottom: 12px; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 4px; }');
-        printWindow.document.write('#modal-qr-preview { padding: 5px; background: white; display: inline-block; margin-bottom: 10px; }');
-        printWindow.document.write('#modal-qr-label { font-family: monospace; font-size: 12px; font-weight: bold; background: #eee; padding: 4px; border: 1px dashed #000; display: block; word-break: break-all; }');
-        printWindow.document.write('</style></head><body>');
-        printWindow.document.write(printContent);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-        }, 500);
-    };
-}
-
-// --- FUNCIONES CRUD DE INVENTARIO ---
-let editingProductId = null;
-
-async function autogenerarProductId(nombre) {
-    if (!nombre || nombre.length < 1) return "";
-    const cleanName = nombre.trim().replace(/[^a-zA-Z]/g, "").toUpperCase();
-    let code = cleanName.substring(0, 3);
-    while (code.length < 3) code += "X";
-
-    try {
-        const snapshot = await get(ref(db, 'inventario'));
-        let maxCounter = 0;
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            Object.keys(data).forEach(key => {
-                const parts = key.split('_');
-                const num = parseInt(parts[0]);
-                if (!isNaN(num) && num > maxCounter) {
-                    maxCounter = num;
-                }
-            });
-        }
-        const nextNum = maxCounter + 1;
-        const nextNumStr = String(nextNum).padStart(3, '0');
-        return `${nextNumStr}_${code}`;
-    } catch (e) {
-        console.error("Error generating product ID:", e);
-        return "001_" + code;
-    }
-}
-
-// Escuchar cambios en nombre de producto para autogenerar el ID
-const invNombreInput = document.getElementById('invNombre');
-const invIdInput = document.getElementById('invId');
-if (invNombreInput && invIdInput) {
-    invNombreInput.addEventListener('input', async () => {
-        if (editingProductId) return; // No autogenerar en edición
-        const nameVal = invNombreInput.value.trim();
-        if (nameVal.length >= 1) {
-            const generatedId = await autogenerarProductId(nameVal);
-            invIdInput.value = generatedId;
-        } else {
-            invIdInput.value = '';
-        }
-    });
-}
-
-async function eliminarProducto(id) {
-    if (confirm(`¿Estás seguro de eliminar el producto ${id}?`)) {
-        try {
-            await remove(ref(db, `inventario/${id}`));
-            await registrarAuditoria('Eliminación Producto', `Producto eliminado: ID ${id}`);
-            crearToast(`[Delete] Producto ${id} eliminado con éxito`, "success");
-        } catch (e) {
-            console.error(e);
-            alert("Error al eliminar producto.");
-        }
-    }
-}
-
-function cargarFormularioProducto(id, prod) {
-    invIdInput.value = id;
-    invNombreInput.value = prod.nombre_producto || '';
-    document.getElementById('invStock').value = prod.stock || 0;
-    document.getElementById('invUbicacion').value = prod.ubicacion || '';
-    document.getElementById('invCategoria').value = prod.categoria || 'Hardware';
-    document.getElementById('invEstado').value = prod.estado || 'Funcional';
-    const invMarca = document.getElementById('invMarca');
-    const invDesc = document.getElementById('invDescripcion');
-    if (invMarca) invMarca.value = prod.marca || '';
-    if (invDesc) invDesc.value = prod.descripcion || '';
-
-    btnAgregarInventario.textContent = "Guardar Cambios";
-    editingProductId = id;
-
-    // Scroll smoothly to form
-    invIdInput.closest('.form-container').scrollIntoView({ behavior: 'smooth' });
-}
-
-const btnAgregarInventario = document.getElementById('btnAgregarInventario');
-if (btnAgregarInventario) {
-    btnAgregarInventario.addEventListener('click', async () => {
-        const id = invIdInput.value.trim();
-        const nombre = invNombreInput.value.trim();
-        const stock = parseInt(document.getElementById('invStock').value);
-        const ubicacion = document.getElementById('invUbicacion').value.trim();
-        const categoria = document.getElementById('invCategoria').value.trim();
-        const estado = document.getElementById('invEstado').value.trim();
-
-        if (!nombre || isNaN(stock)) {
-            alert('Por favor, completa los campos Nombre y Stock.');
-            return;
-        }
-
-        try {
-            const invMarca = document.getElementById('invMarca');
-            const invDesc = document.getElementById('invDescripcion');
-            const marca = invMarca ? invMarca.value.trim() : '';
-            const descripcion = invDesc ? invDesc.value.trim() : '';
-
-            if (editingProductId) {
-                // Modo Edicion
-                await update(ref(db, `inventario/${editingProductId}`), {
-                    nombre_producto: nombre,
-                    stock: stock,
-                    ubicacion: ubicacion,
-                    categoria: categoria,
-                    estado: estado,
-                    marca: marca,
-                    descripcion: descripcion
-                });
-
-                await registrarAuditoria('Edición Producto', `Producto editado: ${nombre} (ID: ${editingProductId})`);
-                crearToast(`[Edit] Producto ${editingProductId} actualizado con éxito`, "success");
-
-                // Reset state
-                editingProductId = null;
-                btnAgregarInventario.textContent = "Agregar";
-            } else {
-                // Modo Agregar
-                const finalId = id || (await autogenerarProductId(nombre));
-
-                const snapshot = await get(ref(db, `inventario/${finalId}`));
-                if (snapshot.exists()) {
-                    alert("Error: El ID del producto autogenerado ya existe.");
-                    return;
-                }
-
-                await set(ref(db, `inventario/${finalId}`), {
-                    nombre_producto: nombre,
-                    stock: stock,
-                    ubicacion: ubicacion,
-                    categoria: categoria,
-                    estado: estado,
-                    marca: marca,
-                    descripcion: descripcion
-                });
-
-                await registrarAuditoria('Registro Producto', `Producto agregado: ${nombre} (ID: ${finalId})`);
-                crearToast(`[OK] Producto ${nombre} agregado con éxito`, "success");
-            }
-
-            // Limpiar formulario
-            invIdInput.value = '';
-            invNombreInput.value = '';
-            document.getElementById('invStock').value = '';
-            document.getElementById('invUbicacion').value = '';
-            document.getElementById('invCategoria').value = 'Hardware';
-            document.getElementById('invEstado').value = 'Funcional';
-
-        } catch (e) {
-            console.error(e);
-            alert("Error al procesar producto.");
-        }
-    });
-}
-
-// --- HELPER: ENVÍO DE CORREO VÍA BACKEND PYTHON ---
-/**
- * Envía un correo usando el endpoint /api/send-email del backend Python.
- * El backend usa smtplib directamente — sin dependencias externas en el frontend.
- */
-async function enviarCorreoConFallback(payload) {
-    try {
-        const response = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: payload.To,
-                subject: payload.Subject,
-                body: payload.Body
-            })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.ok) {
-            console.log('[Email] Correo enviado exitosamente a:', payload.To);
-        } else {
-            console.warn('[Email] El servidor respondió con error:', result.error);
-            crearToast('[!] No se pudo enviar el correo. Usa el código de la consola (F12).', 'danger');
-        }
-    } catch (err) {
-        console.error('[Email] Error al contactar el backend de correo:', err);
-        crearToast('[!] Servicio de correo no disponible. Usa el código de la consola (F12).', 'danger');
-    }
-}
-
-// --- SISTEMA DE LOGIN ---
-const loginOverlay = document.getElementById('loginOverlay');
-const formLogin = document.getElementById('formLogin');
-
-const loginUser = document.getElementById('loginUser');
-const loginPass = document.getElementById('loginPass');
-const btnIngresar = document.getElementById('btnIngresar');
-
-const dashboardContainer = document.querySelector('.dashboard-container');
-
-btnIngresar.addEventListener('click', async () => {
-    const user = loginUser ? loginUser.value.trim() : '';
-    const pass = loginPass ? loginPass.value.trim() : '';
-
-    if (!user || !pass) {
-        alert("Por favor ingrese usuario y contraseña.");
-        return;
-    }
-
-    btnIngresar.disabled = true;
-    btnIngresar.textContent = "Verificando...";
-
-    // --- Validar credenciales en Firebase ---
-    let authenticatedUser = null;
-    try {
-        console.log('[Login] Consultando Firebase para usuario:', user);
-        const snapshot = await get(ref(db, 'usuarios_sistema'));
-
-        if (snapshot.exists()) {
-            const users = snapshot.val();
-            const hashedPass = await sha256(pass);
-            for (const key of Object.keys(users)) {
-                const u = users[key];
-                if (!u || !u.usuario) continue;
-                const passMatch = (u.passwordWeb === pass) || (u.passwordHash && u.passwordHash === hashedPass);
-                if (u.usuario === user && passMatch) {
-                    authenticatedUser = u;
-                    console.log('[Login] OK - Credenciales validas para nodo:', key);
-                    break;
-                }
-            }
-        }
-    } catch (dbError) {
-        console.error('[Login] ERROR al consultar Firebase:', dbError);
-        alert('Error interno en Login: ' + dbError.message);
-        btnIngresar.disabled = false;
-        btnIngresar.textContent = "Ingresar";
-        return;
-    }
-
-    if (!authenticatedUser) {
-        alert("Credenciales incorrectas. Verifica tu usuario y contraseña.");
-        btnIngresar.disabled = false;
-        btnIngresar.textContent = "Ingresar";
-        return;
-    }
-
-    // --- 2FA: Enviar OTP al correo del usuario ---
-    const userCorreo = authenticatedUser.correo;
-    if (userCorreo) {
-        try {
-            const otpResp = await fetch('/api/send-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ correo: userCorreo })
-            });
-            const otpResult = await otpResp.json();
-            if (otpResp.ok && otpResult.ok) {
-                // Mostrar pantalla OTP
-                mostrarPantallaOTP(authenticatedUser);
-            } else {
-                // Si falla OTP, acceso directo (fallback)
-                console.warn('[OTP] No se pudo enviar OTP, acceso directo:', otpResult.error);
-                accederDashboard(authenticatedUser);
-            }
-        } catch (otpErr) {
-            console.warn('[OTP] Error enviando OTP, acceso directo:', otpErr);
-            accederDashboard(authenticatedUser);
-        }
-    } else {
-        // Sin correo, acceso directo
-        accederDashboard(authenticatedUser);
-    }
-    btnIngresar.disabled = false;
-    btnIngresar.textContent = "Ingresar";
-});
-
-// --- FUNCION 2FA: Acceder al dashboard directamente ---
-function accederDashboard(authenticatedUser) {
-    usuarioActivo = authenticatedUser;
-    loginOverlay.style.display = "none";
-    dashboardContainer.style.display = "flex";
-    crearToast("[Unlock] Acceso concedido. Bienvenido, " + authenticatedUser.usuario + "!", "success");
-    actualizarPerfil();
-    aplicarVisibilidadAdmin();
-    registrarAuditoria('Inicio Sesion', `Usuario ${authenticatedUser.usuario} inicio sesion.`);
-}
-
-// --- FUNCION 2FA: Mostrar pantalla OTP ---
-function mostrarPantallaOTP(authenticatedUser) {
-    const formLogin = document.getElementById('formLogin');
-    if (!formLogin) return;
-    formLogin.innerHTML = `
-        <h2>Verificacion en Dos Pasos</h2>
-        <p style="color: var(--text-muted); margin-bottom: 20px;">Hemos enviado un codigo de 6 digitos a <strong>${authenticatedUser.correo}</strong></p>
-        <div class="input-group">
-            <label for="otpCode">Codigo de Verificacion</label>
-            <input type="text" id="otpCode" placeholder="000000" maxlength="6"
-                style="text-align:center; font-size:1.5rem; letter-spacing:8px; font-weight:700;">
-        </div>
-        <button class="primary-btn" id="btnVerificarOTP">Verificar Codigo</button>
-        <p id="otpError" style="color: var(--danger); font-size: 0.85rem; margin-top: 10px; display: none;"></p>
-        <button class="secondary-btn" id="btnVolverLogin" style="margin-top:10px;">Volver al Login</button>
-    `;
-
-    document.getElementById('btnVerificarOTP').addEventListener('click', async () => {
-        const codigo = document.getElementById('otpCode').value.trim();
-        if (!codigo || codigo.length !== 6) {
-            document.getElementById('otpError').textContent = "Ingresa el codigo de 6 digitos.";
-            document.getElementById('otpError').style.display = "block";
-            return;
-        }
-        try {
-            const resp = await fetch('/api/verify-otp', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ codigo: codigo })
-            });
-            const result = await resp.json();
-            if (result.valido) {
-                accederDashboard(authenticatedUser);
-            } else {
-                document.getElementById('otpError').textContent = result.error || "Codigo incorrecto.";
-                document.getElementById('otpError').style.display = "block";
-            }
-        } catch (e) {
-            document.getElementById('otpError').textContent = "Error de conexion.";
-            document.getElementById('otpError').style.display = "block";
-        }
-    });
-
-    document.getElementById('btnVolverLogin').addEventListener('click', () => {
-        location.reload();
-    });
-}
-
-// --- LÓGICA: PANEL DE PERFIL Y CERRAR SESIÓN ---
-const profileNombre = document.getElementById('profileNombre');
-const profileRol = document.getElementById('profileRol');
-const profileUsuario = document.getElementById('profileUsuario');
-const profileCorreo = document.getElementById('profileCorreo');
-const profileIdOperador = document.getElementById('profileIdOperador');
-const profileAuditoria = document.getElementById('profileAuditoria');
-const btnCerrarSesion = document.getElementById('btnCerrarSesion');
-
-function actualizarPerfil() {
-    if (!usuarioActivo) return;
-    profileNombre.textContent = usuarioActivo.usuario || '—';
-    profileRol.textContent = usuarioActivo.rol || '—';
-    profileUsuario.textContent = usuarioActivo.usuario || '—';
-    profileCorreo.textContent = usuarioActivo.correo || '—';
-    profileIdOperador.textContent = usuarioActivo.id_operador || '—';
-
-    // Cargar actividad reciente del usuario
-    const auditRef = ref(db, 'auditoria');
-    onValue(auditRef, (snapshot) => {
-        profileAuditoria.innerHTML = '';
-        const data = snapshot.val();
-        if (data) {
-            const entries = Object.values(data)
-                .filter(e => e.usuario === usuarioActivo.usuario)
-                .reverse()
-                .slice(0, 15);
-            if (entries.length === 0) {
-                profileAuditoria.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>';
-                return;
-            }
-            entries.forEach(entry => {
-                const div = document.createElement('div');
-                div.style.cssText = 'padding: 10px 14px; background: rgba(0,0,0,0.2); border-radius: 10px; border: 1px solid var(--glass-border);';
-                div.innerHTML = `
-                    <p style="font-size: 0.8rem; font-weight: 600; color: var(--text-main);">${entry.accion || '—'}</p>
-                    <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">${entry.detalles || ''}</p>
-                    <p style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; font-family: monospace;">${entry.timestamp || ''}</p>
-                `;
-                profileAuditoria.appendChild(div);
-            });
-        } else {
-            profileAuditoria.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>';
-        }
-    });
-}
-
-if (btnCerrarSesion) {
-    btnCerrarSesion.addEventListener('click', () => {
-        if (confirm('¿Estás seguro de cerrar sesión?')) {
-            usuarioActivo = null;
-            dashboardContainer.style.display = "none";
-            loginOverlay.style.display = "flex";
-            loginUser.value = '';
-            loginPass.value = '';
-            // Ocultar panel de servidor al cerrar sesion
-            const navServidor = document.querySelector('.nav-btn[data-target="panel-servidor"]');
-            if (navServidor) navServidor.style.display = 'none';
-            crearToast('[Bye] Sesion cerrada correctamente.', 'success');
-        }
-    });
-}
-
-// --- COMPONENTES DEL MODAL INTERACTIVO DE TARJETAS ---
-const modalTarjeta = document.getElementById('modalTarjetaDesconocida');
-const modalUidText = document.getElementById('modalUidText');
-const modalUserNombre = document.getElementById('modalUserNombre');
-const modalUserRol = document.getElementById('modalUserRol');
-const btnCancelarModal = document.getElementById('btnCancelarModal');
-const btnRegistrarModal = document.getElementById('btnRegistrarModal');
-const toastContainer = document.getElementById('toastContainer');
-
-let currentUnregisteredUid = "";
-
-onValue(ref(db, 'ultimo_intento_invalido'), (snapshot) => {
-    const data = snapshot.val();
-    if (data && data.uid && data.procesado === false) {
-        currentUnregisteredUid = data.uid;
-        modalUidText.textContent = data.uid;
-        modalUserNombre.value = "";
-        modalUserRol.value = "";
-        modalTarjeta.style.display = 'flex';
-        crearToast(`[!] Intento de acceso denegado. UID: ${data.uid}`, "danger");
-    }
-});
-
-btnRegistrarModal.addEventListener('click', async () => {
-    const nombre = modalUserNombre.value.trim();
-    const rol = modalUserRol.value.trim();
-    const modalCorreoInput = document.getElementById('modalUserCorreo');
-    const correo = modalCorreoInput ? modalCorreoInput.value.trim() : '';
-
-    if (!nombre || !rol || !correo) {
-        alert("Por favor ingrese el Nombre, Rol y Correo Electrónico para autorizar el acceso.");
-        return;
-    }
-    if (!validarEmail(correo)) {
-        alert('El correo electrónico no tiene un formato válido.');
-        return;
-    }
-
-    btnRegistrarModal.disabled = true;
-    btnRegistrarModal.textContent = "Registrando...";
-
-    try {
-        const userWeb = generarUsuarioWeb(nombre);
-        const passWeb = generarPasswordTemporal();
-
-        await set(ref(db, `usuarios/${currentUnregisteredUid}`), {
-            nombre: nombre,
-            rol: rol,
-            uid: currentUnregisteredUid,
-            correo: correo,
-            usuarioWeb: userWeb,
-            passwordWeb: passWeb
-        });
-
-        // Send welcome email with credentials using SMTPJS (resilient)
-        await enviarCorreoConFallback({
-            Host: "smtp.gmail.com",
-            Username: "smartstock97@gmail.com",
-            Password: "F@jardo123",
-            To: correo,
-            From: "smartstock97@gmail.com",
-            Subject: "Bienvenido a Smart Stock - Credenciales de Acceso",
-            Body: `Estimado/a ${nombre},\n\nLe damos la bienvenida al sistema Smart Stock. Se ha registrado su tarjeta RFID con éxito.\n\nSus credenciales de acceso para el dashboard web son:\n- Usuario: ${userWeb}\n- Contraseña Temporal: ${passWeb}\n\nPor favor, conserve estas credenciales de forma segura.\n\nAtentamente,\nSmart Stock System`
-        });
-
-        await update(ref(db, 'ultimo_intento_invalido'), {
-            procesado: true
-        });
-
-        await registrarAuditoria('Registro Docente (Modal)', `Docente registrado vía modal: ${nombre} (UID: ${currentUnregisteredUid})`);
-
-        if (modalCorreoInput) modalCorreoInput.value = '';
-        modalTarjeta.style.display = 'none';
-        crearToast(`[OK] ¡Tarjeta autorizada con éxito para ${nombre}!`, "success");
-    } catch (e) {
-        console.error(e);
-        alert('Error al registrar o enviar correo de bienvenida.');
-    } finally {
-        btnRegistrarModal.disabled = false;
-        btnRegistrarModal.textContent = "Registrar";
-    }
-});
-
-btnCancelarModal.addEventListener('click', async () => {
-    await update(ref(db, 'ultimo_intento_invalido'), {
-        procesado: true
-    });
-    modalTarjeta.style.display = 'none';
-});
-
-// --- LÓGICA DE BÚSQUEDA AVANZADA Y EXPORTACIÓN DE ETIQUETAS QR ---
-
-
-function actualizarEtiquetasQR() {
-    if (!labelsPrintGrid) return;
-    labelsPrintGrid.innerHTML = '';
-
-    const query = qrSearchInput ? qrSearchInput.value.toLowerCase().trim() : '';
-
-    let count = 0;
-    Object.keys(todosLosProductos).forEach(key => {
-        const prod = todosLosProductos[key];
-        const nombre = (prod.nombre_producto || '').toLowerCase();
-        const id = key.toLowerCase();
-        const ubicacion = (prod.ubicacion || '').toLowerCase();
-        const categoria = (prod.categoria || '').toLowerCase();
-
-        if (query === '' || nombre.includes(query) || id.includes(query) || ubicacion.includes(query) || categoria.includes(query)) {
-            count++;
-            const div = document.createElement('div');
-            div.className = 'printable-badge';
-            div.innerHTML = `
-                <div class="badge-header">UCUENCA - INVENTARIO IOT</div>
-                <div class="qr-preview-img" id="qr-preview-${key}"></div>
-                <div class="badge-footer">
-                    <span>${key}</span>
-                </div>
-            `;
-            labelsPrintGrid.appendChild(div);
-
-            const qrUrl = `${window.location.origin}/retiro.html?id=${key}`;
-            if (typeof QRCode !== 'undefined') {
-                new QRCode(document.getElementById(`qr-preview-${key}`), {
-                    text: qrUrl,
-                    width: 130,
-                    height: 130,
-                    colorDark: "#0f172a",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            } else {
-                document.getElementById(`qr-preview-${key}`).innerHTML = `<p style="font-size:0.6rem;color:#ef4444;word-break:break-all;">${qrUrl}</p>`;
-            }
-        }
-    });
-
-    if (count === 0) {
-        labelsPrintGrid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px 0;">No se encontraron productos coincidentes.</p>';
-    }
-}
-
-if (qrSearchInput) {
-    qrSearchInput.addEventListener('input', actualizarEtiquetasQR);
-}
-
-if (btnExportarPdfLabels) {
-    btnExportarPdfLabels.addEventListener('click', async () => {
-        if (!labelsPrintGrid || labelsPrintGrid.children.length === 0) {
-            crearToast('No hay etiquetas para exportar.', 'danger');
-            return;
-        }
-
-        try {
-            crearToast('Generando PDF...', 'success');
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210;
-            const pageHeight = 297;
-            const margin = 15;
-            const labelW = 60;
-            const labelH = 50;
-            const cols = 3;
-            const gapX = (pageWidth - 2 * margin - cols * labelW) / (cols - 1);
-            const gapY = 5;
-
-            let col = 0;
-            let row = 0;
-            let pageNum = 1;
-
-            // Titulo primera pagina
-            pdf.setFontSize(16);
-            pdf.setFont(undefined, 'bold');
-            pdf.text('UCUENCA - INVENTARIO IOT - Etiquetas QR', pageWidth / 2, margin + 5, { align: 'center' });
-            pdf.setFontSize(9);
-            pdf.setFont(undefined, 'normal');
-            pdf.text('Generado: ' + new Date().toLocaleString('es-ES'), pageWidth / 2, margin + 11, { align: 'center' });
-
-            let startY = margin + 18;
-
-            const badges = labelsPrintGrid.querySelectorAll('.printable-badge');
-            for (let i = 0; i < badges.length; i++) {
-                const badge = badges[i];
-                const idText = badge.querySelector('.badge-footer span') ? badge.querySelector('.badge-footer span').textContent : 'ID';
-                const nombreText = badge.querySelector('.badge-header') ? badge.querySelector('.badge-header').textContent : '';
-
-                // Calcular posicion
-                const x = margin + col * (labelW + gapX);
-                const y = startY + row * (labelH + gapY);
-
-                // Verificar si necesitamos nueva pagina
-                if (y + labelH > pageHeight - margin) {
-                    pdf.addPage();
-                    pageNum++;
-                    col = 0;
-                    row = 0;
-                }
-
-                const finalX = margin + col * (labelW + gapX);
-                const finalY = (row === 0 && pageNum === 1) ? startY : margin + row * (labelH + gapY);
-
-                // Dibujar borde de etiqueta
-                pdf.setDrawColor(200, 200, 200);
-                pdf.setLineWidth(0.3);
-                pdf.roundedRect(finalX, finalY, labelW, labelH, 3, 3);
-
-                // Header
-                pdf.setFontSize(6);
-                pdf.setFont(undefined, 'bold');
-                pdf.text('UCUENCA - INVENTARIO IOT', finalX + labelW / 2, finalY + 5, { align: 'center' });
-                pdf.setDrawColor(0);
-                pdf.setLineWidth(0.2);
-                pdf.line(finalX + 5, finalY + 7, finalX + labelW - 5, finalY + 7);
-
-                // Generar QR como imagen usando canvas
-                const qrDiv = badge.querySelector('.qr-preview-img, [id^="qr-preview-"]');
-                if (qrDiv) {
-                    const canvas = qrDiv.querySelector('canvas');
-                    const img = qrDiv.querySelector('img');
-                    let imgData = null;
-                    if (canvas) {
-                        imgData = canvas.toDataURL('image/png');
-                    } else if (img) {
-                        // Crear canvas temporal para convertir img
-                        const tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = img.width || 130;
-                        tempCanvas.height = img.height || 130;
-                        const tCtx = tempCanvas.getContext('2d');
-                        tCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-                        imgData = tempCanvas.toDataURL('image/png');
-                    }
-                    if (imgData) {
-                        const qrSize = 30;
-                        pdf.addImage(imgData, 'PNG', finalX + (labelW - qrSize) / 2, finalY + 9, qrSize, qrSize);
-                    }
-                }
-
-                // ID del producto
-                pdf.setFontSize(7);
-                pdf.setFont(undefined, 'bold');
-                pdf.text(idText, finalX + labelW / 2, finalY + 44, { align: 'center' });
-
-                // Avanzar posicion
-                col++;
-                if (col >= cols) {
-                    col = 0;
-                    row++;
-                }
-            }
-
-            pdf.save('etiquetas_qr_inventario.pdf');
-            crearToast('PDF descargado correctamente.', 'success');
-        } catch (e) {
-            console.error('Error generando PDF:', e);
-            crearToast('Error al generar PDF: ' + e.message, 'danger');
-        }
-    });
-}
-
-// --- FIREBASE: RETIROS DE PRODUCTOS ---
-const listaRetiros = document.getElementById('listaRetiros');
-if (listaRetiros) {
-    onValue(ref(db, 'retiros'), (snapshot) => {
-        listaRetiros.innerHTML = '';
-        const data = snapshot.val();
-        if (data) {
-            const keys = Object.keys(data).reverse();
-            keys.forEach(key => {
-                const r = data[key];
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${r.nombre_producto || '—'}</strong></td>
-                    <td><span style="font-family:monospace; color:var(--primary);">${r.producto_id || '—'}</span></td>
-                    <td>${r.cantidad_retirada || '—'}</td>
-                    <td>${r.stock_anterior !== undefined ? r.stock_anterior : '—'}</td>
-                    <td>${r.stock_nuevo !== undefined ? r.stock_nuevo : '—'}</td>
-                    <td>${r.usuario || '—'}</td>
-                    <td><span style="font-size:0.8rem; color:var(--text-muted);">${r.fecha || '—'}</span></td>
-                `;
-                listaRetiros.appendChild(tr);
-            });
-        } else {
-            listaRetiros.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No hay retiros registrados.</td></tr>';
-        }
-    });
-}
-
-// --- MODULO: GAUGE DE AFORO EN TIEMPO REAL ---
-const aforoArc = document.getElementById('aforoArc');
-const aforoValue = document.getElementById('aforoValue');
-const aforoLimiteEl = document.getElementById('aforoLimite');
-const aforoPorcentaje = document.getElementById('aforoPorcentaje');
-const aforoEstado = document.getElementById('aforoEstado');
-const ARC_LENGTH = 251.33;
-let limiteAforo = 25;
-
-// Read limite_aforo from Firebase
-onValue(ref(db, 'configuracion/limite_aforo'), (snapshot) => {
-    const val = snapshot.val();
-    if (val && val > 0) {
-        limiteAforo = val;
-        if (aforoLimiteEl) aforoLimiteEl.textContent = val;
-        const inputEl = document.getElementById('inputLimiteAforo');
-        if (inputEl && !inputEl.value) inputEl.value = val;
-    }
-});
-
-function actualizarGaugeAforo(personas) {
-    if (!aforoArc) return;
-    const pct = Math.min(personas / limiteAforo, 1);
-    const dashLen = pct * ARC_LENGTH;
-    aforoArc.setAttribute('stroke-dasharray', `${dashLen} ${ARC_LENGTH}`);
-    let color = '#6db87a', estado = 'NORMAL', pctColor = 'var(--success)';
-    let estadoBg = 'rgba(109,184,122,0.15)', estadoBorder = 'rgba(109,184,122,0.3)';
-    if (pct > 0.8) {
-        color = '#e05252'; estado = 'CRITICO'; pctColor = 'var(--danger)';
-        estadoBg = 'rgba(224,82,82,0.15)'; estadoBorder = 'rgba(224,82,82,0.3)';
-    } else if (pct > 0.5) {
-        color = '#d4a030'; estado = 'ALERTA'; pctColor = 'var(--warning)';
-        estadoBg = 'rgba(212,160,48,0.15)'; estadoBorder = 'rgba(212,160,48,0.3)';
-    }
-    aforoArc.setAttribute('stroke', color);
-    aforoValue.textContent = personas;
-    aforoPorcentaje.textContent = Math.round(pct * 100) + '%';
-    aforoPorcentaje.style.color = pctColor;
-    aforoEstado.textContent = estado;
-    aforoEstado.style.background = estadoBg;
-    aforoEstado.style.color = pctColor;
-    aforoEstado.style.borderColor = estadoBorder;
-}
-
-// Hook gauge into aforo sensor (NUESTRA DB, ruta monitoreo)
-onValue(ref(db, 'monitoreo/aforo'), (snapshot) => {
-    const val = snapshot.val();
-    const personas = (val !== null && val !== undefined) ? parseInt(val) || 0 : 0;
-    actualizarGaugeAforo(personas);
-});
-
-// --- MODULO: PANEL SERVIDOR (Solo Admin/SuperAdmin) ---
-const panelServidor = document.getElementById('panel-servidor');
-const inputLimiteAforo = document.getElementById('inputLimiteAforo');
-const btnGuardarLimiteAforo = document.getElementById('btnGuardarLimiteAforo');
-const aforoConfigStatus = document.getElementById('aforoConfigStatus');
-const btnRestartServices = document.getElementById('btnRestartServices');
-const btnShutdownPi = document.getElementById('btnShutdownPi');
+// --- SERVIDOR REMOTE ACTIONS ---
 const serverCmdStatus = document.getElementById('serverCmdStatus');
 
-function esAdmin() {
-    if (!usuarioActivo) return false;
-    const rol = (usuarioActivo.rol || '').toLowerCase();
-    return rol === 'superadmin' || rol === 'admin' || rol === 'super_admin';
-}
-
-function esDocenteOOperador() {
-    if (!usuarioActivo) return false;
-    const rol = (usuarioActivo.rol || '').toLowerCase();
-    return rol === 'docente' || rol === 'operador';
-}
-
-function aplicarVisibilidadAdmin() {
-    // Show/hide "Servidor" button for admin only
-    const navBtn = document.querySelector('.nav-btn[data-target="panel-servidor"]');
-    if (esAdmin()) {
-        if (navBtn) navBtn.style.display = 'flex';
-    } else {
-        if (navBtn) navBtn.style.display = 'none';
+document.getElementById('btnRestartServices').addEventListener('click', async () => {
+    serverCmdStatus.innerText = "Reiniciando servicios...";
+    try {
+        await set(ref(db, 'sistema/comandos_servidor'), "restart_services");
+        crearToast("Señal de reinicio de servicios enviada", "success");
+        setTimeout(() => { serverCmdStatus.innerText = ""; }, 3000);
+    } catch {
+        serverCmdStatus.innerText = "Error al enviar comando";
     }
+});
 
-    // Role-based nav visibility using data-roles attribute
-    const userRol = (usuarioActivo && usuarioActivo.rol) ? usuarioActivo.rol : '';
-    document.querySelectorAll('.nav-btn[data-roles]').forEach(btn => {
-        const allowedRoles = btn.dataset.roles.split(',');
-        if (allowedRoles.includes(userRol)) {
-            btn.style.display = 'flex';
-        } else {
-            btn.style.display = 'none';
+document.getElementById('btnRebootPi').addEventListener('click', async () => {
+    if (confirm("¿Rebotar la Raspberry Pi de forma remota?")) {
+        serverCmdStatus.innerText = "Reiniciando servidor...";
+        try {
+            await set(ref(db, 'sistema/comandos_servidor'), "reboot");
+            crearToast("Señal de reinicio de Raspberry enviada", "success");
+        } catch {
+            serverCmdStatus.innerText = "Error al enviar comando";
         }
-    });
-
-    // Docente/Operador: hide servidor panel
-    if (esDocenteOOperador()) {
-        const navServ = document.querySelector('.nav-btn[data-target="panel-servidor"]');
-        if (navServ) navServ.style.display = 'none';
     }
+});
 
-    // Role-based edit restrictions for Docente
-    if (userRol === 'Docente') {
-        // Docente: can view docentes table but cannot edit/delete RFID users
-        document.querySelectorAll('#listaUsuarios .edit-btn, #listaUsuarios .delete-btn').forEach(b => b.style.display = 'none');
-        const docenteForm = document.querySelector('#panel-usuarios .form-container');
-        if (docenteForm) docenteForm.style.display = 'none';
-        // Docente CAN manage inventory and Usuarios de Plataforma (full access)
-    }
-
-    if (userRol === 'Estudiante') {
-        // Estudiante: read-only inventory, no QR, no forms
-        document.querySelectorAll('#listaInventario .edit-btn, #listaInventario .delete-btn').forEach(b => b.style.display = 'none');
-        document.querySelectorAll('#listaInventario .qr-btn').forEach(b => b.style.display = 'none');
-        const invForm = document.querySelector('#panel-inventario .form-container');
-        if (invForm) invForm.style.display = 'none';
-        // Hide Usuarios de Plataforma for Estudiante
-        const webUsersNav = document.querySelector('.nav-btn[data-target="panel-usuarios-web"]');
-        if (webUsersNav) webUsersNav.style.display = 'none';
-    }
-}
-
-// Create admin nav button dynamically
-(function crearBotonServidor() {
-    const nav = document.querySelector('.nav-menu');
-    if (!nav) return;
-    const btn = document.createElement('button');
-    btn.className = 'nav-btn';
-    btn.dataset.target = 'panel-servidor';
-    btn.style.display = 'none';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon"><path fill="currentColor" d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg><span>Servidor</span>';
-    btn.addEventListener('click', () => {
-        nav.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('panel-servidor').classList.add('active');
-    });
-    const perfilBtn = nav.querySelector('.nav-btn[data-target="panel-perfil"]');
-    if (perfilBtn) nav.insertBefore(btn, perfilBtn);
-    else nav.appendChild(btn);
-})();
-
-// Apply admin visibility on login
-onValue(ref(db, 'usuarios_sistema'), () => { if (usuarioActivo) aplicarVisibilidadAdmin(); });
-
-// Save aforo limit
-if (btnGuardarLimiteAforo) {
-    btnGuardarLimiteAforo.addEventListener('click', async () => {
-        const val = parseInt(inputLimiteAforo.value);
-        if (!val || val < 1) { alert('Ingresa un valor valido mayor a 0.'); return; }
+document.getElementById('btnShutdownPi').addEventListener('click', async () => {
+    if (confirm("¿Apagar la Raspberry Pi de forma remota?")) {
+        serverCmdStatus.innerText = "Apagando servidor...";
         try {
-            await set(ref(db, 'configuracion/limite_aforo'), val);
-            aforoConfigStatus.textContent = 'Limite actualizado a ' + val + ' personas.';
-            aforoConfigStatus.style.color = 'var(--success)';
-            await registrarAuditoria('Cambio Limite Aforo', 'Limite cambiado a ' + val);
-            crearToast('[OK] Limite de aforo actualizado a ' + val, 'success');
-        } catch (e) { console.error(e); aforoConfigStatus.textContent = 'Error al guardar.'; }
-    });
-}
-
-// Restart services
-if (btnRestartServices) {
-    btnRestartServices.addEventListener('click', async () => {
-        if (!confirm('Reiniciara Mosquitto y Node-RED en la Raspberry Pi. Continuar?')) return;
-        try {
-            await set(ref(db, 'sistema/comandos_servidor'), { accion: 'restart_services', timestamp: Date.now(), usuario: usuarioActivo.usuario });
-            serverCmdStatus.textContent = 'Comando enviado. Reiniciando servicios...';
-            serverCmdStatus.style.color = 'var(--warning)';
-            await registrarAuditoria('Reinicio Servicios', 'Comando de reinicio enviado');
-            crearToast('[OK] Comando de reinicio enviado.', 'success');
-        } catch (e) { console.error(e); }
-    });
-}
-
-// Shutdown
-if (btnShutdownPi) {
-    btnShutdownPi.addEventListener('click', async () => {
-        if (!confirm('ATENCION: Apagara la Raspberry Pi. Continuar?')) return;
-        try {
-            await set(ref(db, 'sistema/comandos_servidor'), { accion: 'shutdown', timestamp: Date.now(), usuario: usuarioActivo.usuario });
-            serverCmdStatus.textContent = 'Comando de apagado enviado.';
-            serverCmdStatus.style.color = 'var(--danger)';
-            await registrarAuditoria('Apagar RPi', 'Comando de apagado enviado');
-            crearToast('[!] Comando de apagado enviado.', 'danger');
-        } catch (e) { console.error(e); }
-    });
-}
-
-
-// --- CONTROLES DE MONITOREO ---
-const btnToggleFoco = document.getElementById('btnToggleFoco');
-const btnResetAlarma = document.getElementById('btnResetAlarma');
-
-if (btnToggleFoco) {
-    btnToggleFoco.addEventListener('click', async () => {
-        try {
-            const snap = await get(ref(db, 'estado_foco'));
-            const current = (snap.val() || '').toString().trim().toUpperCase();
-            const nuevoEstado = (current === 'ENCENDIDO' || current === 'ON' || current === 'TRUE' || current === '1') ? 'APAGADO' : 'ENCENDIDO';
-            await set(ref(db, 'estado_foco'), nuevoEstado);
-            crearToast('Iluminacion: ' + nuevoEstado, 'success');
-            await registrarAuditoria('Control Iluminacion', 'Estado cambiado a ' + nuevoEstado);
-        } catch (e) {
-            console.error(e);
-            crearToast('Error al controlar iluminacion', 'danger');
+            await set(ref(db, 'sistema/comandos_servidor'), "shutdown");
+            crearToast("Señal de apagado de Raspberry enviada", "success");
+        } catch {
+            serverCmdStatus.innerText = "Error al enviar comando";
         }
-    });
-}
-
-if (btnResetAlarma) {
-    btnResetAlarma.addEventListener('click', async () => {
-        try {
-            await set(ref(db, 'monitoreo/movimiento_pir'), false);
-            detenerAlertaCritica();
-            crearToast('Alarma PIR reseteada', 'success');
-            await registrarAuditoria('Reset Alarma', 'Alarma PIR reseteada manualmente');
-        } catch (e) {
-            console.error(e);
-            crearToast('Error al resetear alarma', 'danger');
-        }
-    });
-}
-
-// Show alarm reset button when PIR is active
-if (btnResetAlarma) {
-    onValue(ref(db, 'monitoreo/movimiento_pir'), (snapshot) => {
-        const val = snapshot.val();
-        const active = (val === true || val === 'true' || val === 1 || val === '1');
-        btnResetAlarma.style.display = active ? 'block' : 'none';
-    });
-}
-
-// --- BOTON REINICIAR RASPBERRY PI (Admin) ---
-const btnRebootPi = document.getElementById('btnRebootPi');
-if (btnRebootPi) {
-    btnRebootPi.addEventListener('click', async () => {
-        if (!confirm('ATENCION: Reiniciara la Raspberry Pi completamente. Continuar?')) return;
-        try {
-            await set(ref(db, 'sistema/comando'), 'REBOOT');
-            const statusEl = document.getElementById('serverCmdStatus');
-            if (statusEl) {
-                statusEl.textContent = 'Comando REBOOT enviado. La Pi se reiniciara en unos segundos.';
-                statusEl.style.color = 'var(--warning)';
-            }
-            await registrarAuditoria('Reboot RPi', 'Comando REBOOT enviado a la Raspberry Pi');
-            crearToast('[OK] Comando de reinicio enviado.', 'success');
-        } catch (e) { console.error(e); }
-    });
-}
-
-// Funcion dinamica para alertas Toast en pantalla
-function crearToast(mensaje, tipo = "danger") {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    if (tipo === "success") toast.style.borderLeftColor = "var(--success)";
-    toast.textContent = mensaje;
-    toastContainer.appendChild(toast);
-    setTimeout(() => { toast.remove(); }, 6000);
-}
+    }
+});

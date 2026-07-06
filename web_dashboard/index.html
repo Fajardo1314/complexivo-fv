@@ -4,20 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Stock</title>
-    <!-- Google Fonts: Outfit -->
+    <title>Smart Stock - Dashboard Claro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- QRCode.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- SMTP.js -->
-    <script src="https://smtpjs.com/v3/smtp.js"></script>
-    <!-- jsPDF for QR label export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
@@ -25,11 +18,9 @@
     <!-- Overlay de Login y MFA -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-box glass-panel">
-            <!-- Formulario de Login -->
             <div id="formLogin" class="auth-step">
-                <h2>🔐 Iniciar Sesión</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Acceso restringido para personal autorizado
-                </p>
+                <h2>Iniciar Sesión</h2>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Acceso restringido para personal autorizado</p>
                 <div class="input-group">
                     <label for="loginUser">Usuario</label>
                     <input type="text" id="loginUser" placeholder="usuario">
@@ -40,12 +31,10 @@
                 </div>
                 <button class="primary-btn" id="btnIngresar">Verificar Credenciales</button>
             </div>
-
         </div>
     </div>
 
     <div class="dashboard-container" style="display: none;">
-        <!-- Hamburger Menu Button (mobile only) -->
         <button id="hamburgerBtn"
             style="display:none; position:fixed; top:12px; left:12px; z-index:9998; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-main); padding:10px 14px; border-radius:10px; font-size:1.2rem; cursor:pointer; backdrop-filter:blur(10px);">
             <svg viewBox="0 0 24 24" width="22" height="22">
@@ -63,59 +52,34 @@
                     </svg>
                 </div>
                 <div>
-                    <h2>Smart <span>Stock</span></h2>
-                    <p>Sistema de acceso e inventario</p>
+                    <h2 style="color: var(--primary);">Smart <span style="color: var(--accent);">Stock</span></h2>
+                    <p>Gestión de Acceso Claro</p>
                 </div>
             </div>
             <nav class="nav-menu">
                 <button class="nav-btn active" data-target="panel-monitoreo" data-roles="SuperAdmin,Docente,Estudiante">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M7,10H9V17H7V10M11,7H13V17H11V7M15,13H17V17H15V13Z" />
-                    </svg>
                     <span>Monitoreo General</span>
                 </button>
                 <button class="nav-btn" data-target="panel-inventario" data-roles="SuperAdmin,Docente,Estudiante">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M20,18c1.1,0,2-0.9,2-2V6c0-1.1-0.9-2-2-2H4C2.9,4,2,4.9,2,6v10c0,1.1,0.9,2,2,2H20z M4,6h16v10H4V6z M7,9h10v2H7V9z M7,13h7v2H7V13z" />
-                    </svg>
                     <span>Inventario de Aula</span>
                 </button>
-                <button class="nav-btn" data-target="panel-qr" data-roles="SuperAdmin">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M3 3H9V9H3V3M5 5V7H7V5H5M3 15H9V21H3V15M5 17V19H7V17H5M15 3H21V9H15V3M17 5V7H19V5H17M15 15H17V17H15V15M17 17H19V19H17V17M19 15H21V17H19V15M15 19H17V21H15V19M19 19H21V21H19V19M11 11H13V13H11V11M11 3H13V9H11V3M3 11H9V13H3V11M15 11H21V13H15V11M11 15H13V21H11V15Z" />
-                    </svg>
+                <button class="nav-btn" data-target="panel-qr" data-roles="SuperAdmin,Docente">
                     <span>Alta y Etiquetado QR</span>
                 </button>
                 <button class="nav-btn" data-target="panel-movimientos" data-roles="SuperAdmin,Docente">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M7,6H17V8H7V6M7,10H17V12H7V10M7,14H12V16H7V14Z" />
-                    </svg>
                     <span>Historial de Movimientos</span>
                 </button>
                 <button class="nav-btn" data-target="panel-usuarios" data-roles="SuperAdmin,Docente">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z" />
-                    </svg>
-                    <span>Gestión de Docentes</span>
+                    <span>Gestión de Docentes (RFID)</span>
                 </button>
                 <button class="nav-btn" data-target="panel-usuarios-web" data-roles="SuperAdmin,Docente">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-                    </svg>
                     <span>Usuarios Plataforma</span>
                 </button>
                 <button class="nav-btn" data-target="panel-perfil" data-roles="SuperAdmin,Docente,Estudiante">
-                    <svg viewBox="0 0 24 24" width="20" height="20" class="nav-icon">
-                        <path fill="currentColor"
-                            d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4M12,6C9.79,6 8,7.79 8,10C8,12.21 9.79,14 12,14C14.21,14 16,12.21 16,10C16,7.79 14.21,6 12,6M6,18.23C7.86,19.94 9.81,21 12,21C14.19,21 16.14,19.94 18,18.23C16.1,16.47 14,15.5 12,15.5C10,15.5 7.9,16.47 6,18.23Z" />
-                    </svg>
                     <span>Mi Perfil</span>
+                </button>
+                <button class="nav-btn" data-target="panel-servidor" data-roles="SuperAdmin,Docente">
+                    <span>Servidor</span>
                 </button>
             </nav>
             <div class="sidebar-footer">
@@ -136,49 +100,33 @@
             <section id="panel-monitoreo" class="panel active">
                 <header class="panel-header">
                     <h1>Monitoreo en Tiempo Real</h1>
-                    <p>Estado dinámico de seguridad, flujo e iluminación del aula</p>
+                    <p>Visualización clara de sensores, accesos y estado del aula</p>
                 </header>
 
                 <div class="metrics-grid">
-                    <!-- Tarjeta: Personas -->
-                    <div class="metric-card glass-panel card-blue">
-                        <div class="metric-icon">
-                            <svg viewBox="0 0 24 24" width="24" height="24">
-                                <path fill="currentColor"
-                                    d="M16 13c-2.28 0-6.01 1.12-6.75 3.32C10.66 17.55 12.82 18 15 18c2.18 0 4.34-.45 5.75-1.32-.74-2.2-4.47-3.32-6.75-3.32M15 12c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3M6 13c-.93 0-2.5.46-3.12 1.33C4.03 15.15 5.5 15.5 7 15.5c.34 0 .68-.02 1.02-.06C7.38 14.53 6.64 13.62 6 13m1-1c1.38 0 2.5-1.12 2.5-2.5S8.38 7 7 7 4.5 8.12 4.5 9.5 5.62 12 7 12m8-7.5c.97 0 1.75-.78 1.75-1.75S15.97 1 15 1s-1.75.78-1.75 1.75S14.03 4.5 15 4.5Z" />
-                            </svg>
-                        </div>
+                    <!-- Tarjeta: Permanencia y Conteo -->
+                    <div class="metric-card glass-panel card-blue" id="cardPermanencia">
+                        <div class="metric-icon">⏳</div>
                         <div class="metric-details">
-                            <h3>Ocupación Actual</h3>
-                            <div class="metric-value" id="countPersonas">0</div>
-                            <p class="metric-sub">Personas en el aula</p>
+                            <h3>Tiempo de Permanencia</h3>
+                            <div class="metric-value" id="permanenciaReloj">00:00</div>
+                            <p class="metric-sub" id="permanenciaUsuario">Nadie adentro</p>
                         </div>
                     </div>
 
                     <!-- Tarjeta: Seguridad PIR -->
                     <div class="metric-card glass-panel card-secure" id="cardAlerta">
-                        <div class="metric-icon" id="iconAlerta">
-                            <svg viewBox="0 0 24 24" width="24" height="24" id="svgAlerta">
-                                <path fill="currentColor"
-                                    d="M12,12A5,5 0 1,1 17,7A5,5 0 0,1 12,12M12,14C17.07,14 21,16.24 21,19v2H3V19C3,16.24 6.93,14 12,14Z" />
-                            </svg>
-                        </div>
+                        <div class="metric-icon">👤</div>
                         <div class="metric-details">
                             <h3>Seguridad (PIR)</h3>
                             <div class="metric-value" id="estadoPir">Seguro</div>
-                            <p class="metric-sub" id="subAlerta">No se detecta movimiento</p>
+                            <p class="metric-sub" id="subAlerta">Sin movimiento</p>
                         </div>
                     </div>
 
                     <!-- Tarjeta: Chapa -->
                     <div class="metric-card glass-panel card-lock" id="cardChapa">
-                        <div class="metric-icon" id="iconChapa">
-                            <!-- SVG Candado Cerrado -->
-                            <svg viewBox="0 0 24 24" width="24" height="24" class="lock-closed">
-                                <path fill="currentColor"
-                                    d="M18,8H17V6A5,5 0 0,0 7,6V8H6A2,2 0 0,0 4,10V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V10A2,2 0 0,0 18,8M9,6A3,3 0 0,1 15,6V8H9V6M18,20H6V10H18V20M12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17A2,2 0 0,0 14,15A2,2 0 0,0 12,13Z" />
-                            </svg>
-                        </div>
+                        <div class="metric-icon">🔒</div>
                         <div class="metric-details">
                             <h3>Cerrojo Eléctrico</h3>
                             <div class="metric-value" id="estadoChapa">CERRADA</div>
@@ -188,179 +136,136 @@
 
                     <!-- Tarjeta: Foco -->
                     <div class="metric-card glass-panel card-light" id="cardFoco">
-                        <div class="metric-icon" id="iconFoco">
-                            <svg viewBox="0 0 24 24" width="24" height="24">
-                                <path fill="currentColor"
-                                    d="M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21H9M12,4A5,5 0 0,1 17,9C17,11.04 15.9,12.78 14.26,13.68C14.07,13.78 13.9,13.95 13.82,14.17C13.75,14.38 13.75,14.62 13.82,14.83C13.9,15 14,15.15 14,15.32V16H10V15.32C10,15.15 10.1,15 10.18,14.83C10.25,14.62 10.25,14.38 10.18,14.17C10.1,13.95 9.93,13.78 9.74,13.68C8.1,12.78 7,11.04 7,9A5,5 0 0,1 12,4Z" />
-                            </svg>
-                        </div>
+                        <div class="metric-icon">💡</div>
                         <div class="metric-details">
-                            <h3>Estado de la Iluminación</h3>
-                            <div class="metric-value" id="estadoFoco"><span class="badge"
-                                    style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.3);">[Off]
-                                    Apagado</span></div>
-                            <p class="metric-sub" id="subFoco">Luz artificial desactivada</p>
+                            <h3>Estado Iluminación</h3>
+                            <div class="metric-value" id="estadoFoco">Apagado</div>
+                            <p class="metric-sub" id="subFoco">Luz artificial apagada</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Controles de Monitoreo -->
-                <div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
-                    <button id="btnToggleFoco" class="primary-btn"
-                        style="flex: 1; min-width: 180px; background: linear-gradient(135deg, #d4a030, #e6b422); box-shadow: 0 5px 15px rgba(212,160,48,0.3);">
-                        Controlar Iluminacion
-                    </button>
-                    <button id="btnResetAlarma" class="primary-btn"
-                        style="flex: 1; min-width: 180px; background: linear-gradient(135deg, #c0392b, #e74c3c); box-shadow: 0 5px 15px rgba(231,76,60,0.3); display: none;">
-                        Resetear Alarma
-                    </button>
-                </div>
-
-                <!-- Control de Umbral de Luz (Soft-Automatización) -->
+                <!-- Casilleros Estante Security Widgets -->
                 <div class="glass-panel" style="padding: 20px; margin-bottom: 25px;">
-                    <h3 style="font-size: 1rem; margin-bottom: 10px;">💡 Automatización de Luces (BH1750)</h3>
-                    <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="font-size: 0.8rem; color: var(--text-muted);">Umbral de Luxes</label>
-                            <input type="range" id="umbralLuxSlider" min="0" max="1000" step="5" value="70"
-                                style="width: 100%; margin-top: 5px;">
-                            <span id="umbralLuxLabel" style="font-size: 0.9rem; font-weight: 600;">500 lux</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <p style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Luz
-                                Actual</p>
-                            <p id="luxActual" style="font-size: 1.4rem; font-weight: 800; color: var(--primary);">--</p>
-                        </div>
-                        <div style="text-align: center;">
-                            <p style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Estado
-                                Luces</p>
-                            <div id="estadoLucesAuto"><span class="badge"
-                                    style="background:rgba(148,163,184,0.15);color:var(--text-muted);border:1px solid rgba(148,163,184,0.3);">--</span>
-                            </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>Seguridad de Estante (Sensor IR FC-51)</h3>
+                        <div id="modoSeguroArea">
+                            <label style="font-weight: 600; font-size: 0.9rem; margin-right: 10px; color: var(--text-muted);">Retiro Seguro:</label>
+                            <input type="checkbox" id="checkModoSeguro" style="width:18px; height:18px; cursor:pointer;">
                         </div>
                     </div>
-                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">Si la luz ambiental baja
-                        del umbral, las luces se encienden automáticamente. Modifica el valor con el slider.</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="glass-panel" id="widgetCasillero1" style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
+                            <h4 style="font-size: 1.1rem;">Compartimento 1</h4>
+                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero1">SEGURO</p>
+                        </div>
+                        <div class="glass-panel" id="widgetCasillero2" style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
+                            <h4 style="font-size: 1.1rem;">Compartimento 2</h4>
+                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero2">SEGURO</p>
+                        </div>
+                    </div>
+                    <div id="alertaEstanteBanner" class="msg msg-err" style="margin-top: 15px; font-weight: 800;"></div>
                 </div>
 
-                <!-- Gauge de Aforo -->
-                <div class="chart-container glass-panel" style="margin-bottom: 25px;">
-                    <div class="chart-header">
-                        <h3>Control de Aforo en Tiempo Real</h3>
-                        <span class="live-tag"><span class="pulse"></span> EN VIVO</span>
-                    </div>
-                    <div
-                        style="display: flex; align-items: center; justify-content: center; gap: 40px; padding: 20px 0;">
-                        <svg id="aforoGauge" width="200" height="120" viewBox="0 0 200 120">
-                            <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.08)"
-                                stroke-width="16" stroke-linecap="round" />
-                            <path id="aforoArc" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#6db87a"
-                                stroke-width="16" stroke-linecap="round" stroke-dasharray="0 251.33" />
-                            <text id="aforoValue" x="100" y="85" text-anchor="middle" fill="var(--text-main)"
-                                font-size="32" font-weight="800">0</text>
-                            <text x="100" y="108" text-anchor="middle" fill="var(--text-muted)" font-size="11">personas
-                                dentro</text>
-                        </svg>
+                <!-- Controles de Iluminación y Horarios -->
+                <div class="glass-panel" style="padding: 20px; margin-bottom: 25px;">
+                    <h3>Ajustes de Iluminación</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 15px; align-items: center;">
                         <div>
-                            <div style="margin-bottom: 12px;">
-                                <span
-                                    style="color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Limite
-                                    Actual</span>
-                                <p id="aforoLimite"
-                                    style="font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0;">25
-                                </p>
+                            <button id="btnToggleFoco" class="primary-btn">Controlar Iluminacion</button>
+                            <button id="btnAbrirPuertaRemota" class="primary-btn" style="margin-top: 10px; background: #111111;">Abrir Puerta (new-conexion)</button>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Duración Encendido Foco</label>
+                            <div style="display: flex; gap: 10px; margin-top: 5px;">
+                                <input type="number" id="inputTiempoFoco" min="5" value="10" style="width: 70px; padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border);">
+                                <select id="selectUnidadFoco" style="padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
+                                    <option value="minutos">Minutos</option>
+                                    <option value="horas">Horas</option>
+                                </select>
+                                <button id="btnGuardarTiempoFoco" style="padding: 5px 10px; border-radius: 8px; border: none; background: var(--primary); color: white; cursor: pointer; font-weight: bold;">Fijar</button>
                             </div>
-                            <div style="margin-bottom: 12px;">
-                                <span
-                                    style="color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Ocupacion</span>
-                                <p id="aforoPorcentaje"
-                                    style="font-size: 1.4rem; font-weight: 700; color: var(--success); margin: 0;">0%
-                                </p>
-                            </div>
-                            <div>
-                                <span id="aforoEstado"
-                                    style="padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; background: rgba(109,184,122,0.15); color: var(--success); border: 1px solid rgba(109,184,122,0.3);">NORMAL</span>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Umbral de Luxes (BH1750)</label>
+                            <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                                <input type="range" id="umbralLuxSlider" min="0" max="1000" step="5" value="100" style="flex: 1;">
+                                <span id="umbralLuxLabel" style="font-weight: bold;">100 lux</span>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Grafica de Trafico -->
-                <div class="chart-container glass-panel">
-                    <div class="chart-header">
-                        <h3>Gráfico de Afluencia en Tiempo Real</h3>
-                        <span class="live-tag"><span class="pulse"></span> EN VIVO</span>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="traficoChart"></canvas>
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--glass-border);">
+                        <h4>Horario de Iluminación Permitido</h4>
+                        <div style="display: flex; gap: 15px; margin-top: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label>Hora Inicio</label>
+                                <input type="time" id="inputHoraInicio" value="06:30" style="padding: 6px 12px; width: 130px;">
+                            </div>
+                            <div class="input-group" style="margin-bottom: 0;">
+                                <label>Hora Fin</label>
+                                <input type="time" id="inputHoraFin" value="22:00" style="padding: 6px 12px; width: 130px;">
+                            </div>
+                            <button id="btnGuardarHorario" class="primary-btn" style="width: auto; height: 38px; margin-top: 18px; padding: 0 20px;">Guardar Horario</button>
+                        </div>
                     </div>
                 </div>
             </section>
 
             <!-- PANEL: INVENTARIO -->
             <section id="panel-inventario" class="panel">
-                <header class="panel-header">
-                    <h1>Inventario Físico del Aula</h1>
-                    <p>Control exacto del material de laboratorio e instrumental en el aula</p>
+                <header class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>Inventario Físico del Aula</h1>
+                        <p>Búsqueda y control del equipamiento de laboratorio</p>
+                    </div>
+                    <button id="btnIrAjustes" class="secondary-btn" style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Ajustes de Inventario</button>
                 </header>
 
-                <!-- Formulario Agregar Producto -->
                 <div class="form-container glass-panel" style="margin-bottom: 25px; padding: 20px;">
-                    <h2 style="font-size: 1.1rem; margin-bottom: 15px;">Agregar Producto al Inventario</h2>
-                    <div
-                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
+                    <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--text-main);">Agregar Producto al Inventario</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>ID Producto</label>
-                            <input type="text" id="invId" placeholder="Autogenerado..." readonly
-                                style="padding: 8px 12px; font-size: 0.85rem; background: rgba(0,0,0,0.2); cursor: not-allowed;">
+                            <input type="text" id="invId" placeholder="Autogenerado..." readonly style="background: #f1ebd9; cursor: not-allowed; color:#888;">
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Nombre</label>
-                            <input type="text" id="invNombre" placeholder="Ej. Monitor"
-                                style="padding: 8px 12px; font-size: 0.85rem;">
-                        </div>
-                        <div class="input-group" style="margin-bottom: 0;">
-                            <label>Marca</label>
-                            <input type="text" id="invMarca" placeholder="Ej. Rigol"
-                                style="padding: 8px 12px; font-size: 0.85rem;">
-                        </div>
-                        <div class="input-group" style="margin-bottom: 0;">
-                            <label>Descripcion</label>
-                            <input type="text" id="invDescripcion" placeholder="Ej. Osciloscopio digital 4 canales"
-                                style="padding: 8px 12px; font-size: 0.85rem;">
-                        </div>
-                        <div class="input-group" style="margin-bottom: 0;">
-                            <label>Stock</label>
-                            <input type="number" id="invStock" placeholder="Ej. 10"
-                                style="padding: 8px 12px; font-size: 0.85rem;">
+                            <input type="text" id="invNombre" placeholder="Ej. Osciloscopio">
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Ubicación</label>
-                            <input type="text" id="invUbicacion" placeholder="Ej. Estante A"
-                                style="padding: 8px 12px; font-size: 0.85rem;">
+                            <input type="text" id="invUbicacion" placeholder="Ej. Estante A">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Stock</label>
+                            <input type="number" id="invStock" placeholder="Ej. 10">
+                        </div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <label>Carrera</label>
+                            <select id="invCarrera" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
+                            </select>
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Categoría</label>
-                            <select id="invCategoria"
-                                style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
-                                <option value="Hardware">Hardware</option>
-                                <option value="Herramientas">Herramientas</option>
-                                <option value="Otros">Otros</option>
-                                <option value="Equipos de Medición">Equipos de Medición</option>
-                                <option value="Accesorios">Accesorios</option>
+                            <select id="invCategoria" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
                             </select>
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
-                            <label>Estado del Equipo</label>
-                            <select id="invEstado"
-                                style="padding: 8px 12px; font-size: 0.85rem; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%; height: 38px;">
+                            <label>Estado</label>
+                            <select id="invEstado" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
                                 <option value="Funcional">Funcional</option>
+                                <option value="Regular">Regular</option>
                                 <option value="No Funcional">No Funcional</option>
                             </select>
                         </div>
-                        <button class="primary-btn" id="btnAgregarInventario"
-                            style="padding: 10px; font-size: 0.85rem; height: 38px;">Agregar</button>
+                        <button class="primary-btn" id="btnAgregarInventario" style="height: 38px;">Agregar</button>
                     </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 15px 20px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+                    <span style="font-weight: 700; color: var(--text-muted);">Buscar:</span>
+                    <input type="text" id="invSearchInput" placeholder="Filtrar por Código o Nombre..." style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); flex: 1;">
                 </div>
 
                 <div class="table-container glass-panel">
@@ -369,7 +274,7 @@
                             <tr>
                                 <th>Código</th>
                                 <th>Nombre</th>
-                                <th>Marca</th>
+                                <th>Carrera</th>
                                 <th>Categoría</th>
                                 <th>Ubicación</th>
                                 <th>Stock</th>
@@ -378,37 +283,70 @@
                             </tr>
                         </thead>
                         <tbody id="listaInventario">
-                            <!-- Datos cargados dinámicamente -->
                         </tbody>
                     </table>
                 </div>
             </section>
 
-            <!-- PANEL: BUSCADOR Y ETIQUETAS QR -->
+            <!-- PANEL: AJUSTES DE INVENTARIO -->
+            <section id="panel-ajustes-inventario" class="panel">
+                <header class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>Ajustes de Inventario</h1>
+                        <p>Gestión de Carreras y Categorías configurables en el sistema</p>
+                    </div>
+                    <button id="btnVolverInventario" class="secondary-btn" style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Volver a Inventario</button>
+                </header>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+                    <!-- Ajustes Carreras -->
+                    <div class="form-container glass-panel">
+                        <h2>Carreras Admitidas</h2>
+                        <div class="input-group">
+                            <label>Añadir Nueva Carrera</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="inputNuevaCarrera" placeholder="Ej. TAI">
+                                <button class="primary-btn" id="btnAgregarCarrera" style="width: auto; padding: 0 15px;">Añadir</button>
+                            </div>
+                        </div>
+                        <ul id="listaAjustesCarreras" style="list-style: none; margin-top: 15px; padding-left: 0;">
+                        </ul>
+                    </div>
+
+                    <!-- Ajustes Categorías -->
+                    <div class="form-container glass-panel">
+                        <h2>Categorías del Inventario</h2>
+                        <div class="input-group">
+                            <label>Añadir Nueva Categoría</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="inputNuevaCategoria" placeholder="Ej. Instrumentación">
+                                <button class="primary-btn" id="btnAgregarCategoria" style="width: auto; padding: 0 15px;">Añadir</button>
+                            </div>
+                        </div>
+                        <ul id="listaAjustesCategorias" style="list-style: none; margin-top: 15px; padding-left: 0;">
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PANEL: ALTA Y ETIQUETADO QR -->
             <section id="panel-qr" class="panel">
                 <header class="panel-header">
                     <h1>Buscador Avanzado y Etiquetas QR</h1>
-                    <p>Filtra el inventario en tiempo real y exporta las etiquetas físicas listas para imprimir</p>
+                    <p>Selecciona las etiquetas físicas de los productos que deseas imprimir</p>
                 </header>
                 <div class="search-container glass-panel"
                     style="padding: 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center; justify-content: space-between;">
-                    <div style="flex: 1; position: relative;">
+                    <div style="flex: 1;">
                         <input type="text" id="qrSearchInput"
-                            placeholder="Buscar por Nombre, ID, Ubicación o Categoría..."
-                            style="width: 100%; padding: 12px 20px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border); color: white; font-size: 1rem;">
+                            placeholder="Buscar por Nombre, ID o Categoría..."
+                            style="width: 100%; padding: 12px 20px; border-radius: 12px; background: white; border: 1px solid var(--glass-border); color: var(--text-main); font-size: 1rem;">
                     </div>
                     <button class="primary-btn" id="btnExportarPdfLabels"
-                        style="display: flex; align-items: center; gap: 8px; height: 45px; padding: 0 20px;">
-                        <svg viewBox="0 0 24 24" width="18" height="18">
-                            <path fill="currentColor"
-                                d="M19,3H6V7H18M19,12A1,1 0 0,1 18,11A1,1 0 0,1 19,10A1,1 0 0,1 20,11A1,1 0 0,1 19,12M16,19H8V14H16M19,8H5A3,3 0 0,0 2,11V17H6V21H18V17H22V11A3,3 0 0,0 19,8Z" />
-                        </svg>
-                        <span>Exportar Etiquetas a PDF</span>
+                        style="display: flex; align-items: center; gap: 8px; height: 45px; padding: 0 20px; width: auto;">
+                        <span>Exportar QRs Seleccionados a PDF</span>
                     </button>
                 </div>
-                <div class="labels-print-grid" id="labelsPrintGrid"
-                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
-                    <!-- Etiquetas físicas generadas dinámicamente -->
+                <div class="labels-print-grid" id="labelsPrintGrid">
                 </div>
             </section>
 
@@ -416,12 +354,17 @@
             <section id="panel-movimientos" class="panel">
                 <header class="panel-header">
                     <h1>Historial de Movimientos</h1>
-                    <p>Registro de accesos RFID y retiros de productos del inventario</p>
+                    <p>Accesos RFID y extracciones de productos del aula</p>
                 </header>
 
-                <!-- Sub-seccion: Accesos RFID -->
+                <div class="glass-panel" style="padding: 15px 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center;">
+                    <span style="font-weight: 700; color: var(--text-muted);">Filtrar por Fecha:</span>
+                    <input type="date" id="filtroFechaMovimientos" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
+                    <button id="btnLimpiarFiltroFecha" class="secondary-btn" style="width: auto; margin-top: 0; padding: 8px 15px; height: 38px;">Limpiar</button>
+                </div>
+
                 <div class="table-container glass-panel" style="margin-bottom: 25px;">
-                    <h2 style="font-size: 1.1rem; margin-bottom: 15px;">Accesos RFID</h2>
+                    <h2 style="color: var(--text-main);">Accesos RFID</h2>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -440,9 +383,8 @@
                     </table>
                 </div>
 
-                <!-- Sub-seccion: Retiro de Productos -->
                 <div class="table-container glass-panel">
-                    <h2 style="font-size: 1.1rem; margin-bottom: 15px;">Retiro de Productos</h2>
+                    <h2 style="color: var(--text-main);">Retiro de Productos</h2>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -461,18 +403,17 @@
                 </div>
             </section>
 
-            <!-- PANEL: GESTIÓN DE DOCENTES (USUARIOS RFID) -->
+            <!-- PANEL: GESTIÓN DE DOCENTES (RFID) -->
             <section id="panel-usuarios" class="panel">
                 <header class="panel-header">
                     <h1>Gestión de Docentes (RFID)</h1>
-                    <p>Administración y registro de tarjetas RFID autorizadas en el aula</p>
+                    <p>Administración de las tarjetas autorizadas para apertura física</p>
                 </header>
                 <div class="form-grid">
-                    <!-- Formulario de Registro de Usuario -->
                     <div class="form-container glass-panel">
                         <h2>Registrar Nuevo Docente</h2>
                         <div class="input-group">
-                            <label>UID de Tarjeta RFID (Identificador Físico)</label>
+                            <label>UID de Tarjeta RFID</label>
                             <input type="text" id="userUid" placeholder="Ej. 2938472910">
                         </div>
                         <div class="input-group">
@@ -481,49 +422,50 @@
                         </div>
                         <div class="input-group">
                             <label>Rol / Permiso</label>
-                            <input type="text" id="userRol" placeholder="Ej. Docente, Administrador, Técnico">
+                            <select id="userRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white; font-family: Outfit;">
+                                <option value="Docente">Docente</option>
+                                <option value="SuperAdmin">Super Admin</option>
+                                <option value="Auxiliar">Auxiliar</option>
+                                <option value="Estudiante">Estudiante</option>
+                            </select>
                         </div>
                         <div class="input-group">
                             <label>Correo Electrónico</label>
-                            <input type="email" id="userCorreo" placeholder="Ej. usuario@ucuenca.edu.ec">
+                            <input type="email" id="userCorreo" placeholder="Ej. juan.perez@ucuenca.edu.ec">
                         </div>
                         <button class="primary-btn" id="btnGuardarUsuario">Autorizar Tarjeta RFID</button>
                     </div>
 
-                    <!-- Tabla de Usuarios Autorizados -->
                     <div class="table-container glass-panel">
-                        <h2>Personal con Acceso Autorizado</h2>
+                        <h2>Personal Autorizado</h2>
                         <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>UID Tarjeta</th>
-                                    <th>Nombre del Docente</th>
+                                    <th>Docente</th>
                                     <th>Rol</th>
                                     <th>Correo</th>
-                                    <th>Actividad Reciente</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody id="listaUsuarios">
-                                <!-- Datos cargados dinámicamente -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- PANEL: GESTIÓN DE USUARIOS DE PLATAFORMA -->
+            <!-- PANEL: GESTIÓN DE USUARIOS PLATAFORMA -->
             <section id="panel-usuarios-web" class="panel">
                 <header class="panel-header">
-                    <h1>Usuarios de Plataforma (Web)</h1>
-                    <p>Administración de cuentas con acceso al panel de administración del Dashboard</p>
+                    <h1>Usuarios Plataforma (Web)</h1>
+                    <p>Gestión de las cuentas del Dashboard administrativo</p>
                 </header>
                 <div class="form-grid">
-                    <!-- Formulario de Registro de Usuario Web -->
                     <div class="form-container glass-panel">
                         <h2 id="webUserFormTitle">Registrar Nuevo Usuario Web</h2>
                         <div class="input-group">
-                            <label>ID de Operador (Identificador Único)</label>
+                            <label>ID de Operador</label>
                             <input type="text" id="webUserOperatorId" placeholder="Ej. ADM_002">
                         </div>
                         <div class="input-group">
@@ -536,12 +478,11 @@
                         </div>
                         <div class="input-group">
                             <label>Correo Electrónico</label>
-                            <input type="email" id="webUserCorreo" placeholder="Ej. admin2@ucuenca.edu.ec">
+                            <input type="email" id="webUserCorreo" placeholder="Ej. carlos@ucuenca.edu.ec">
                         </div>
                         <div class="input-group">
-                            <label>Rol / Permiso</label>
-                            <select id="webUserRol"
-                                style="padding: 10px; background: var(--bg-color); color: white; border: 1px solid var(--glass-border); border-radius: 8px; width: 100%;">
+                            <label>Rol</label>
+                            <select id="webUserRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
                                 <option value="SuperAdmin">Super Admin</option>
                                 <option value="Docente">Docente</option>
                                 <option value="Estudiante">Estudiante</option>
@@ -550,7 +491,6 @@
                         <button class="primary-btn" id="btnGuardarWebUsuario">Registrar Usuario Web</button>
                     </div>
 
-                    <!-- Tabla de Usuarios Web Autorizados -->
                     <div class="table-container glass-panel">
                         <h2>Usuarios con Acceso Web</h2>
                         <table class="data-table">
@@ -564,7 +504,6 @@
                                 </tr>
                             </thead>
                             <tbody id="listaUsuariosWeb">
-                                <!-- Datos cargados dinámicamente -->
                             </tbody>
                         </table>
                     </div>
@@ -575,186 +514,125 @@
             <section id="panel-perfil" class="panel">
                 <header class="panel-header">
                     <h1>Mi Perfil</h1>
-                    <p>Información de tu cuenta de usuario en el sistema</p>
+                    <p>Detalles e historial de la cuenta activa</p>
                 </header>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; align-items: start;">
                     <div class="form-container glass-panel">
                         <div style="text-align: center; margin-bottom: 25px;">
-                            <div
-                                style="width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(135deg, #8b5e3c, #c8956c); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 8px 25px rgba(139, 94, 60, 0.4);">
-                                <svg viewBox="0 0 24 24" width="44" height="44" style="color: white;">
-                                    <path fill="currentColor"
-                                        d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.42,4 20,7.58 20,12C20,16.42 16.42,20 12,20C7.58,20 4,16.42 4,12C4,7.58 7.58,4 12,4M12,6C9.79,6 8,7.79 8,10C8,12.21 9.79,14 12,14C14.21,14 16,12.21 16,10C16,7.79 14.21,6 12,6M6,18.23C7.86,19.94 9.81,21 12,21C14.19,21 16.14,19.94 18,18.23C16.1,16.47 14,15.5 12,15.5C10,15.5 7.9,16.47 6,18.23Z" />
-                                </svg>
+                            <div style="width: 90px; height: 90px; border-radius: 50%; background: #111111; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);">
+                                <span style="font-size: 2.5rem; color: white;">👤</span>
                             </div>
-                            <h2 id="profileNombre"
-                                style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">
-                                —</h2>
-                            <span id="profileRol" class="badge badge-purple"
-                                style="font-size: 0.85rem; padding: 6px 16px;">—</span>
+                            <h2 id="profileNombre" style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">—</h2>
+                            <span id="profileRol" class="badge badge-green" style="font-size: 0.85rem; padding: 6px 16px;">—</span>
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 16px;">
-                            <div
-                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--glass-border);">
-                                <svg viewBox="0 0 24 24" width="20" height="20"
-                                    style="color: var(--primary); flex-shrink: 0;">
-                                    <path fill="currentColor"
-                                        d="M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z" />
-                                </svg>
+                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p
-                                        style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-                                        Usuario</p>
-                                    <p id="profileUsuario"
-                                        style="font-size: 1rem; font-weight: 600; color: var(--text-main);">—</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Usuario</p>
+                                    <p id="profileUsuario" style="font-size: 1rem; font-weight: 600;">—</p>
                                 </div>
                             </div>
-
-                            <div
-                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--glass-border);">
-                                <svg viewBox="0 0 24 24" width="20" height="20"
-                                    style="color: var(--primary); flex-shrink: 0;">
-                                    <path fill="currentColor"
-                                        d="M20,8L12,13L4,8V6L12,11L20,6M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z" />
-                                </svg>
+                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p
-                                        style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-                                        Correo Electrónico</p>
-                                    <p id="profileCorreo"
-                                        style="font-size: 1rem; font-weight: 600; color: var(--text-main);">—</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Correo</p>
+                                    <p id="profileCorreo" style="font-size: 1rem; font-weight: 600;">—</p>
                                 </div>
                             </div>
-
-                            <div
-                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid var(--glass-border);">
-                                <svg viewBox="0 0 24 24" width="20" height="20"
-                                    style="color: var(--primary); flex-shrink: 0;">
-                                    <path fill="currentColor"
-                                        d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-                                </svg>
+                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p
-                                        style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-                                        ID Operador</p>
-                                    <p id="profileIdOperador"
-                                        style="font-size: 1rem; font-weight: 600; font-family: monospace; color: var(--text-main);">
-                                        —</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">ID Operador</p>
+                                    <p id="profileIdOperador" style="font-size: 1rem; font-weight: 600; font-family: monospace;">—</p>
                                 </div>
                             </div>
                         </div>
 
-                        <button id="btnCerrarSesion" class="primary-btn"
-                            style="margin-top: 30px; background: linear-gradient(135deg, #c0392b, #e74c3c); box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);">
-                            <svg viewBox="0 0 24 24" width="18" height="18" style="color: white;">
-                                <path fill="currentColor"
-                                    d="M16,17V14H9V10H16V7L21,12L16,17M14,2A2,2 0 0,1 16,4V6H14V4H5V20H14V18H16V20A2,2 0 0,1 14,22H5A2,2 0 0,1 3,20V4A2,2 0 0,1 5,2H14Z" />
-                            </svg>
-                            Cerrar Sesión
-                        </button>
+                        <button id="btnCerrarSesion" class="primary-btn" style="margin-top: 30px; background: #c0392b;">Cerrar Sesión</button>
                     </div>
 
                     <div class="glass-panel" style="padding: 30px;">
-                        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 20px; color: white;">Actividad
-                            Reciente</h2>
-                        <div id="profileAuditoria"
-                            style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
-                            <p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de
-                                actividad.</p>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 20px; color: var(--text-main);">Actividad Reciente</h2>
+                        <div id="profileAuditoria" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
+                            <p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- PANEL: CONFIGURACION DE SERVIDOR (Solo Admin/SuperAdmin) -->
+            <!-- PANEL: CONFIGURACIÓN DE SERVIDOR (Restringido) -->
             <section id="panel-servidor" class="panel">
                 <header class="panel-header">
-                    <h1>Configuracion de Servidor</h1>
-                    <p>Panel exclusivo para administradores - Control del sistema y parametros</p>
+                    <h1>Configuración del Servidor</h1>
+                    <p>Operaciones de administración y reinicio de la Raspberry Pi</p>
                 </header>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; align-items: start;">
-                    <!-- Control de Aforo -->
+                <div style="display: grid; grid-template-columns: 1fr; gap: 25px; align-items: start;">
                     <div class="form-container glass-panel">
-                        <h2>Limite de Aforo</h2>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Define el maximo
-                            de personas permitidas en el aula.</p>
-                        <div class="input-group">
-                            <label>Limite Maximo de Personas</label>
-                            <input type="number" id="inputLimiteAforo" min="1" max="100" placeholder="Ej. 25">
-                        </div>
-                        <button class="primary-btn" id="btnGuardarLimiteAforo">Guardar Limite</button>
-                        <p id="aforoConfigStatus"
-                            style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);"></p>
-                    </div>
-                    <!-- Control del Servidor -->
-                    <div class="form-container glass-panel">
-                        <h2>Control del Servidor</h2>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">Acciones remotas
-                            sobre la Raspberry Pi.</p>
-                        <button class="primary-btn" id="btnRestartServices"
-                            style="background: linear-gradient(135deg, #d4a030, #e6b422); box-shadow: 0 5px 15px rgba(212,160,48,0.3); margin-bottom: 12px;">Reiniciar
-                            Mosquitto / Node-RED</button>
-                        <button class="primary-btn" id="btnRebootPi"
-                            style="background: linear-gradient(135deg, #8e44ad, #9b59b6); box-shadow: 0 5px 15px rgba(142,68,173,0.3); margin-bottom: 12px;">Reiniciar
-                            Raspberry Pi</button>
-                        <button class="primary-btn" id="btnShutdownPi"
-                            style="background: linear-gradient(135deg, #c0392b, #e74c3c); box-shadow: 0 5px 15px rgba(231,76,60,0.3);">Apagar
-                            Raspberry Pi</button>
-                        <p id="serverCmdStatus" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
-                        </p>
+                        <h2>Acciones de Control de Hardware</h2>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Control remoto directo de los contenedores Docker y sistema operativo de la Raspberry Pi.</p>
+                        <button class="primary-btn" id="btnRestartServices" style="margin-bottom: 12px; background: #111111;">Reiniciar Servicios (Mosquitto/Nginx)</button>
+                        <button class="primary-btn" id="btnRebootPi" style="margin-bottom: 12px; background: #d35400;">Reiniciar Raspberry Pi</button>
+                        <button class="primary-btn" id="btnShutdownPi" style="background: #c0392b;">Apagar Raspberry Pi</button>
+                        <p id="serverCmdStatus" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);"></p>
                     </div>
                 </div>
             </section>
 
         </main>
     </div>
-    <!-- Script de Inicializacion y Logica -->
-    <script type="module" src="app.js"></script>
 
-    <div id="modalTarjetaDesconocida" class="modal-overlay" style="display: none;">
-        <div class="modal-content glass-panel animate-fade-in">
+    <!-- DIALOGO CONFIRMACION DE PRESENCIA EN BODEGA FUERA DE HORARIO -->
+    <div id="modalConfirmacionPresencia" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-panel" style="border: 1px solid var(--primary);">
             <div class="modal-header">
-                <span class="warning-icon">[!]</span>
-                <h2>Acceso Denegado: Tarjeta No Registrada</h2>
+                <h2>Movimiento Detectado Fuera de Horario</h2>
             </div>
-            <p>Se ha detectado un intento de acceso con un UID desconocido en la puerta:</p>
+            <p style="margin: 15px 0; font-size: 0.95rem;">Se ha detectado movimiento en el aula durante el horario de restricción (10:00 PM a 6:30 AM). ¿Hay alguien dentro de la bodega?</p>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+                <button id="btnPresenciaSi" class="primary-btn" style="width: 100px; background: var(--success);">SÍ</button>
+                <button id="btnPresenciaNo" class="primary-btn" style="width: 100px; background: var(--danger);">NO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE TARJETA RFID DESCONOCIDA -->
+    <div id="modalTarjetaDesconocida" class="modal-overlay" style="display: none;">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Tarjeta No Registrada</h2>
+            </div>
+            <p style="margin: 10px 0;">Se ha leído una tarjeta desconocida en la puerta companion:</p>
             <div class="uid-highlight">
                 <span id="modalUidText">00 00 00 00</span>
             </div>
-            <p style="margin-bottom: 15px; color: var(--text-muted);">¿Deseas autorizar esta tarjeta para dar acceso al
-                personal?</p>
-
-            <div class="modal-form" style="text-align: left; margin-top: 15px;">
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">¿Deseas autorizar esta tarjeta RFID en el sistema?</p>
+            <div class="modal-form" style="text-align: left;">
                 <div class="input-group">
-                    <label for="modalUserNombre">Nombre del Personal</label>
-                    <input type="text" id="modalUserNombre" placeholder="Ej. Ing. Carlos Alvarado"
-                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                    <label>Nombre del Docente</label>
+                    <input type="text" id="modalUserNombre" placeholder="Ej. Ing. Carlos Alvarado">
                 </div>
-                <div class="input-group" style="margin-top: 15px;">
-                    <label for="modalUserRol">Rol / Permiso</label>
-                    <input type="text" id="modalUserRol" placeholder="Ej. Investigador, Pasante"
-                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                <div class="input-group">
+                    <label>Rol / Permiso</label>
+                    <select id="modalUserRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
+                        <option value="Docente">Docente</option>
+                        <option value="SuperAdmin">Super Admin</option>
+                        <option value="Auxiliar">Auxiliar</option>
+                        <option value="Estudiante">Estudiante</option>
+                    </select>
                 </div>
-                <div class="input-group" style="margin-top: 15px;">
-                    <label for="modalUserCorreo">Correo Electrónico</label>
-                    <input type="email" id="modalUserCorreo" placeholder="Ej. personal@ucuenca.edu.ec"
-                        style="width:100%; padding:10px; margin-top:5px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white;">
+                <div class="input-group">
+                    <label>Correo Electrónico</label>
+                    <input type="email" id="modalUserCorreo" placeholder="Ej. carlos@ucuenca.edu.ec">
                 </div>
             </div>
-
             <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 20px;">
-                <button id="btnCancelarModal"
-                    style="flex: 1; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--glass-border); cursor: pointer; font-weight: 600;">❌
-                    Cancelar</button>
-                <button id="btnRegistrarModal"
-                    style="flex: 1; padding: 10px; border-radius: 8px; background: var(--primary); color: white; border: none; cursor: pointer; font-weight: 600;">[Key]
-                    Registrar</button>
+                <button id="btnCancelarModal" class="secondary-btn" style="margin-top:0; flex:1;">Cancelar</button>
+                <button id="btnRegistrarModal" class="primary-btn" style="flex:1;">Registrar</button>
             </div>
         </div>
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

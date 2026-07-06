@@ -4,20 +4,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bodega - Smart Stock</title>
+    <title>Bodega - Smart Stock (Claro)</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --bg: #0d0907;
-            --glass: rgba(30, 20, 12, 0.55);
-            --border: rgba(180, 140, 90, 0.12);
-            --primary: #c8956c;
-            --accent: #d4a574;
-            --text: #f5efe8;
-            --muted: #a89480;
-            --danger: #e05252;
-            --success: #6db87a;
+            --bg: #fafaf8;
+            --glass: rgba(255, 255, 255, 0.92);
+            --border: rgba(0, 0, 0, 0.10);
+            --primary: #111111;
+            --accent: #444444;
+            --text: #0f0f0f;
+            --muted: #6b6b6b;
+            --danger: #c0392b;
+            --success: #27ae60;
         }
 
         * {
@@ -28,13 +28,14 @@
         }
 
         body {
-            background: radial-gradient(circle at 10% 20%, #2a1a10 0%, #0d0907 90%);
+            background: #fafaf8;
             color: var(--text);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            background: radial-gradient(circle at 10% 20%, #ffffff 0%, #f5f3ef 100%);
         }
 
         .card {
@@ -45,13 +46,14 @@
             padding: 30px;
             max-width: 480px;
             width: 100%;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
         }
 
         h1 {
             font-size: 1.4rem;
             font-weight: 800;
             margin-bottom: 4px;
+            color: var(--primary);
         }
 
         h2 {
@@ -124,12 +126,12 @@
         }
 
         .btn-retiro {
-            background: linear-gradient(135deg, #c0392b, #e74c3c);
+            background: #c0392b;
             color: #fff;
         }
 
         .btn-devolucion {
-            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            background: #27ae60;
             color: #fff;
         }
 
@@ -142,7 +144,7 @@
         .btn-back {
             width: 100%;
             padding: 12px;
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.8);
             border: 1px solid var(--border);
             border-radius: 12px;
             color: var(--text);
@@ -155,10 +157,10 @@
         .btn-login {
             width: 100%;
             padding: 14px;
-            background: linear-gradient(135deg, #c8956c, #d4a574);
+            background: #111111;
             border: none;
             border-radius: 12px;
-            color: #0d0907;
+            color: white;
             font-size: 1rem;
             font-weight: 800;
             cursor: pointer;
@@ -176,14 +178,14 @@
         }
 
         .msg-ok {
-            background: rgba(109, 184, 122, 0.15);
-            border: 1px solid rgba(109, 184, 122, 0.3);
+            background: rgba(39, 174, 96, 0.1);
+            border: 1px solid rgba(39, 174, 96, 0.2);
             color: var(--success);
         }
 
         .msg-err {
-            background: rgba(224, 82, 82, 0.15);
-            border: 1px solid rgba(224, 82, 82, 0.3);
+            background: rgba(192, 57, 43, 0.1);
+            border: 1px solid rgba(192, 57, 43, 0.2);
             color: var(--danger);
         }
 
@@ -196,15 +198,21 @@
         }
 
         .badge-green {
-            background: rgba(109, 184, 122, 0.15);
+            background: rgba(39, 174, 96, 0.1);
             color: var(--success);
-            border: 1px solid rgba(109, 184, 122, 0.3);
+            border: 1px solid rgba(39, 174, 96, 0.2);
+        }
+
+        .badge-orange {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(245, 158, 11, 0.2);
         }
 
         .badge-red {
-            background: rgba(224, 82, 82, 0.15);
+            background: rgba(192, 57, 43, 0.1);
             color: var(--danger);
-            border: 1px solid rgba(224, 82, 82, 0.3);
+            border: 1px solid rgba(192, 57, 43, 0.2);
         }
 
         .notfound {
@@ -233,7 +241,7 @@
             width: 100%;
             padding: 12px 14px;
             border-radius: 10px;
-            background: rgba(255, 255, 255, 0.06);
+            background: white;
             border: 1px solid var(--border);
             color: var(--text);
             font-size: 0.95rem;
@@ -263,7 +271,7 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(43, 29, 18, 0.4);
             backdrop-filter: blur(8px);
             display: none;
             align-items: center;
@@ -282,7 +290,7 @@
             padding: 28px;
             max-width: 380px;
             width: 90%;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 15px 40px rgba(139, 94, 60, 0.2);
         }
     </style>
 </head>
@@ -296,20 +304,20 @@
 
         <!-- PRODUCTO (visible para todos) -->
         <div id="productInfo" style="display:none">
-            <div id="sessionBadge" class="user-badge" style="display:none;">Sesion: <strong id="sessionUser">—</strong>
+            <div id="sessionBadge" class="user-badge" style="display:none;">Sesión: <strong id="sessionUser">—</strong>
             </div>
 
             <h1 id="pNombre">—</h1>
-            <p class="sub" id="pMarca">—</p>
+            <p class="sub" id="pCarrera">—</p>
 
             <div class="stock-big"><span id="pStock">0</span><small>unidades disponibles</small></div>
 
-            <div class="row"><span class="lbl">Codigo Sistema</span><span class="val" id="pCodigo">—</span></div>
-            <div class="row"><span class="lbl">Marca</span><span class="val" id="pMarcaRow">—</span></div>
-            <div class="row"><span class="lbl">Categoria</span><span class="val" id="pCategoria">—</span></div>
-            <div class="row"><span class="lbl">Ubicacion</span><span class="val" id="pUbicacion">—</span></div>
+            <div class="row"><span class="lbl">Código Sistema</span><span class="val" id="pCodigo">—</span></div>
+            <div class="row"><span class="lbl">Carrera</span><span class="val" id="pCarreraRow">—</span></div>
+            <div class="row"><span class="lbl">Categoría</span><span class="val" id="pCategoria">—</span></div>
+            <div class="row"><span class="lbl">Ubicación</span><span class="val" id="pUbicacion">—</span></div>
             <div class="row"><span class="lbl">Estado</span><span class="val" id="pEstado">—</span></div>
-            <div class="row"><span class="lbl">Descripcion</span><span class="val" id="pDescripcion">—</span></div>
+            <div class="row"><span class="lbl">Descripción</span><span class="val" id="pDescripcion">—</span></div>
 
             <div class="actions">
                 <button class="btn btn-retiro" id="btnRetirar">Retirar (-1)</button>
@@ -319,14 +327,14 @@
             <div class="msg msg-ok" id="msgOk"></div>
             <div class="msg msg-err" id="msgErr"></div>
 
-            <button class="btn-back" id="btnLogout" style="display:none;margin-top:8px;">Cerrar Sesion</button>
+            <button class="btn-back" id="btnLogout" style="display:none;margin-top:8px;">Cerrar Sesión</button>
             <button class="btn-back" onclick="window.location.href='/'">Volver al Dashboard</button>
         </div>
 
         <!-- NO ENCONTRADO -->
         <div id="notFound" class="notfound" style="display:none">
             <h2>Producto no encontrado</h2>
-            <p style="color:var(--muted)">El codigo QR no corresponde a ningun articulo.</p>
+            <p style="color:var(--muted)">El código QR no corresponde a ningún artículo.</p>
             <button class="btn-back" onclick="window.location.href='/'">Volver</button>
         </div>
     </div>
@@ -334,18 +342,17 @@
     <!-- MODAL LOGIN (aparece al hacer clic en Retirar/Devolver) -->
     <div class="modal-overlay" id="loginModal">
         <div class="modal-box">
-            <h2>Iniciar Sesion</h2>
-            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:15px;">Debe autenticarse para retirar o
-                devolver productos</p>
+            <h2>Iniciar Sesión</h2>
+            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:15px;">Debe autenticarse para retirar o devolver productos</p>
             <div class="input-group">
                 <label>Usuario</label>
                 <input type="text" id="loginUser" placeholder="Ingrese su usuario">
             </div>
             <div class="input-group">
-                <label>Contrasena</label>
-                <input type="password" id="loginPass" placeholder="Ingrese su contrasena">
+                <label>Contraseña</label>
+                <input type="password" id="loginPass" placeholder="Ingrese su contraseña">
             </div>
-            <button class="btn-login" id="btnLogin">Iniciar Sesion</button>
+            <button class="btn-login" id="btnLogin">Iniciar Sesión</button>
             <div class="msg msg-err" id="loginErr"></div>
             <button class="btn-back" id="btnCancelLogin" style="margin-top:8px;">Cancelar</button>
         </div>
@@ -363,23 +370,6 @@
         let prod = null;
         let usuarioActivo = null;
         let pendingAction = null; // 'retirar' o 'devolver'
-
-        async function sha256(text) {
-            try {
-                if (window.crypto && window.crypto.subtle) {
-                    const msgBuffer = new TextEncoder().encode(text);
-                    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                    const hashArray = Array.from(new Uint8Array(hashBuffer));
-                    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-                }
-            } catch (e) { }
-            let hash = 0;
-            for (let i = 0; i < text.length; i++) {
-                hash = ((hash << 5) - hash) + text.charCodeAt(i);
-                hash |= 0;
-            }
-            return 'fallback_' + Math.abs(hash).toString(16);
-        }
 
         // --- CARGAR PRODUCTO (sin login) ---
         async function load() {
@@ -403,15 +393,17 @@
 
         function render() {
             document.getElementById('pNombre').textContent = prod.nombre_producto || prod.nombre || '—';
-            document.getElementById('pMarca').textContent = prod.marca || '';
+            document.getElementById('pCarrera').textContent = prod.carrera || '';
             document.getElementById('pCodigo').textContent = productId;
-            document.getElementById('pMarcaRow').textContent = prod.marca || '—';
+            document.getElementById('pCarreraRow').textContent = prod.carrera || '—';
             document.getElementById('pCategoria').textContent = prod.categoria || '—';
             document.getElementById('pUbicacion').textContent = prod.ubicacion || '—';
             document.getElementById('pDescripcion').textContent = prod.descripcion || '—';
             const estado = prod.estado || 'Funcional';
             document.getElementById('pEstado').innerHTML = estado === 'Funcional'
                 ? '<span class="badge badge-green">Funcional</span>'
+                : estado === 'Regular'
+                ? '<span class="badge badge-orange">Regular</span>'
                 : '<span class="badge badge-red">No Funcional</span>';
             updateStock(prod.stock || 0);
         }
@@ -462,7 +454,7 @@
             const errEl = document.getElementById('loginErr');
 
             if (!user || !pass) {
-                errEl.textContent = 'Ingrese usuario y contrasena.';
+                errEl.textContent = 'Ingrese usuario y contraseña.';
                 errEl.style.display = 'block';
                 return;
             }
@@ -475,23 +467,21 @@
                 const snapshot = await get(ref(db, 'usuarios_sistema'));
                 if (snapshot.exists()) {
                     const users = snapshot.val();
-                    const hashedPass = await sha256(pass);
                     for (const key of Object.keys(users)) {
                         const u = users[key];
                         if (!u || !u.usuario) continue;
-                        const passMatch = (u.passwordWeb === pass) || (u.passwordHash && u.passwordHash === hashedPass);
-                        if (u.usuario === user && passMatch) {
+                        if (u.usuario === user && u.passwordWeb === pass) {
                             usuarioActivo = u;
                             break;
                         }
                     }
                 }
             } catch (e) {
-                errEl.textContent = 'Error de conexion.';
+                errEl.textContent = 'Error de conexión.';
                 errEl.style.display = 'block';
             }
 
-            document.getElementById('btnLogin').textContent = 'Iniciar Sesion';
+            document.getElementById('btnLogin').textContent = 'Iniciar Sesión';
             document.getElementById('btnLogin').disabled = false;
 
             if (usuarioActivo) {
@@ -501,7 +491,7 @@
                 document.getElementById('sessionUser').textContent = usuarioActivo.usuario;
                 document.getElementById('btnLogout').style.display = 'block';
 
-                // Ejecutar accion pendiente
+                // Ejecutar acción pendiente
                 if (pendingAction === 'retirar') {
                     doRetirar();
                 } else if (pendingAction === 'devolver') {
@@ -518,7 +508,7 @@
             usuarioActivo = null;
             document.getElementById('sessionBadge').style.display = 'none';
             document.getElementById('btnLogout').style.display = 'none';
-            showMsg('ok', 'Sesion cerrada.');
+            showMsg('ok', 'Sesión cerrada.');
         });
 
         // --- BOTONES RETIRAR/DEVOLVER ---
@@ -584,7 +574,7 @@
             } catch (e) { showMsg('err', 'Error al devolver.'); }
         }
 
-        // Cargar producto inmediatamente (sin login)
+        // Cargar producto inmediatamente
         load();
     </script>
 </body>
