@@ -219,6 +219,57 @@ def firebase_foco_listener():
     except Exception as e:
         print(f"[FOCO-LISTENER Error] {e}")
 
+# THREAD: SINCRONIZADOR DE ESTADO REAL DEL SWITCH TUYA
+# Lee el estado fisico real del interruptor Tuya cada 3 segundos.
+# Si el switch fue cambiado manualmente (desde el interruptor fisico),
+# actualiza Firebase para que el Dashboard refleje el estado correcto.
+def tuya_estado_sincronizador():
+    global tuya_api
+    print("[TUYA-SYNC] Iniciando sincronizador bidireccional del switch fisico...")
+    inicializar_tuya()
+    last_estado_tuya = None
+    codigos_switch = ["switch_1", "switch", "master_switch"]
+
+    while True:
+        try:
+            if tuya_api is None:
+                inicializar_tuya()
+                time.sleep(5)
+                continue
+
+            # Consultar estado real del dispositivo desde la nube de Tuya
+            response = tuya_api.get(f"/v1.0/devices/{TUYA_DEVICE_ID}/status")
+            if not response.get("success"):
+                time.sleep(5)
+                continue
+
+            # Buscar el switch principal en la respuesta
+            estado_tuya = None
+            for item in response.get("result", []):
+                if item.get("code") in codigos_switch:
+                    estado_tuya = item.get("value")
+                    break
+
+            if estado_tuya is None:
+                time.sleep(3)
+                continue
+
+            estado_str = "ENCENDIDO" if estado_tuya else "APAGADO"
+
+            # Solo actualizar Firebase si el estado cambio fisicamente
+            if estado_str != last_estado_tuya:
+                last_estado_tuya = estado_str
+                # Leer el estado actual en Firebase para evitar loop de escritura
+                estado_firebase = db.reference('estado_foco').get()
+                if estado_firebase != estado_str:
+                    print(f"[TUYA-SYNC] Estado fisico del switch cambio a {estado_str}. Actualizando Firebase.")
+                    db.reference('estado_foco').set(estado_str)
+        except Exception as e:
+            print(f"[TUYA-SYNC Error] {e}")
+            tuya_api = None  # Forzar reconexion en la siguiente iteracion
+        time.sleep(3)
+
+
 # MQTT SENSOR RELAY
 mqtt_pub_client = None
 
@@ -554,6 +605,7 @@ def main():
         threading.Thread(target=permanencia_inactividad_monitor, daemon=True).start()
         threading.Thread(target=mqtt_sensor_relay, daemon=True).start()
         threading.Thread(target=firebase_foco_listener, daemon=True).start()
+        threading.Thread(target=tuya_estado_sincronizador, daemon=True).start()
         app.run(host='0.0.0.0', port=5000, use_reloader=False)
     except KeyboardInterrupt:
         pass

@@ -1,20 +1,13 @@
 /*
- * ESP32 — Firmware Aforo Bidireccional + Puerta Independiente
- * Máquina de estados estricta anti-ruido eléctrico.
+ * ESP32 — Firmware Módulo de Sensores (Seguridad de Estante, PIR, Puerta y Luz)
+ * Lógica actualizada: Sin Aforo, Sensores IR FC-51 adaptados como alarma de estantería.
  *
  * Pines:
- *   IR Exterior: GPIO 35 (INPUT)
- *   IR Interior: GPIO 32 (INPUT_PULLUP)
- *   Magnético:   GPIO 13 (INPUT_PULLUP) — 100% independiente
- *   PIR:         GPIO 27
- *   BH1750:      I2C SDA=21, SCL=22
- *
- * Algoritmo anti-fantasma:
- *   Estado IDLE → esperar que un sensor pase a LOW.
- *   Al activarse un sensor, se abre una ventana de 2000ms.
- *   Si el segundo sensor se activa DENTRO de la ventana → cruce válido.
- *   Si la ventana expira sin segundo sensor → se descarta (ruido).
- *   Tras cruce válido → bloqueo global de 1500ms.
+ *   IR Casillero 1: GPIO 33 (INPUT_PULLUP)
+ *   IR Casillero 2: GPIO 32 (INPUT_PULLUP)
+ *   Magnético:      GPIO 13 (INPUT_PULLUP) — 100% independiente
+ *   PIR:            GPIO 27 (INPUT)
+ *   BH1750:         I2C SDA=21, SCL=22
  */
 
 #include <BH1750.h>
@@ -22,6 +15,15 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <Wire.h>
+
+// Prototipos de funciones
+void conectarWiFi();
+void conectarMQTT();
+void publicar(const char *topic, String val);
+void procesarCasilleros(unsigned long ahora);
+void procesarPIR(unsigned long ahora);
+void procesarPuerta(unsigned long ahora);
+void procesarLuz(unsigned long ahora);
 
 // ═══════════════════════════════════════════
 //  CONFIGURACIÓN
@@ -32,44 +34,31 @@ const char *MQTT_BROKER = "10.42.0.1";
 const int MQTT_PORT = 1883;
 
 // Topics MQTT
-const char *TOPIC_AFORO = "aforo";
+const char *TOPIC_CASILLERO1 = "sensor_ir/casillero1";
+const char *TOPIC_CASILLERO2 = "sensor_ir/casillero2";
 const char *TOPIC_PUERTA = "puerta_fisica/estado";
 const char *TOPIC_PIR = "movimiento_pir";
 const char *TOPIC_LUZ = "aula/luminosidad";
 
 // Pines
-const int PIN_IR1 = 33; // Exterior
-const int PIN_IR2 = 32; // Interior (PULLUP)
-const int PIN_PIR = 27;
-const int PIN_MAG = 13; // Magnético (PULLUP) — independiente
+const int PIN_IR1 = 33; // Casillero 1
+const int PIN_IR2 = 32; // Casillero 2
+const int PIN_PIR = 27; // PIR
+const int PIN_MAG = 13; // Magnético (PULLUP)
 
-// Configuracion sensor magnetico
-// Cambiar a true si el sensor reporta invertido (cerrado muestra abierto)
-const bool INVERTIR_MAGNETICO = true;
+// Configuración sensor magnético
+// Cambiar a true si el sensor reporta invertido
+const bool INVERTIR_MAGNETICO = false;
 
 // ═══════════════════════════════════════════
 //  CONSTANTES DE TIEMPO (ms)
 // ═══════════════════════════════════════════
-const unsigned long VENTANA_CRUCE = 2000;  // Ventana para segundo sensor
-const unsigned long BLOQUEO_GLOBAL = 1500; // Debounce tras cruce válido
+const unsigned long DEBOUNCE_IR = 200;      // Debounce para evitar alertas falsas por ruido en IR
 const unsigned long DEBOUNCE_PIR = 5000;
 const unsigned long DEBOUNCE_PUERTA = 1000;
 const unsigned long INTERVALO_LUZ = 5000;
 const unsigned long RECONECTAR_WIFI = 30000;
 const unsigned long RECONECTAR_MQTT = 30000;
-
-// ═══════════════════════════════════════════
-//  MÁQUINA DE ESTADOS — AFORO
-// ═══════════════════════════════════════════
-enum EstadoAforo {
-  IDLE,         // Esperando primer sensor
-  IR1_ACTIVADO, // IR1 (exterior) LOW, esperando IR2
-  IR2_ACTIVADO  // IR2 (interior) LOW, esperando IR1
-};
-
-EstadoAforo estadoAforo = IDLE;
-unsigned long tiempoActivacion = 0; // millis() cuando se activó primer sensor
-unsigned long tiempoBloqueo = 0;    // millis() del último cruce válido
 
 // ═══════════════════════════════════════════
 //  ESTADO GLOBAL
@@ -78,7 +67,6 @@ WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 BH1750 lightMeter;
 
-int contadorAforo = 0;
 bool bh1750_ok = false;
 bool last_pir = LOW;
 unsigned long lastPir = 0;
@@ -87,8 +75,16 @@ unsigned long lastPuer = 0;
 unsigned long lastLuz = 0;
 unsigned long lastWifi = 0;
 unsigned long lastMqtt = 0;
-int lastIR1 = HIGH;
-int lastIR2 = HIGH;
+unsigned long lastReportePuerta = 0;  // Reporte periodico de diagnostico
+const unsigned long REPORTE_PUERTA = 10000;  // Imprimir estado cada 10s
+
+
+// Estado de los casilleros (FC-51 IR)
+// Nota: LOW = Obstáculo detectado (Alerta / Mano cerca), HIGH = Seguro / Libre
+int lastCasillero1 = -1;
+int lastCasillero2 = -1;
+unsigned long lastDebounceIR1 = 0;
+unsigned long lastDebounceIR2 = 0;
 
 // ═══════════════════════════════════════════
 //  SETUP
@@ -96,30 +92,36 @@ int lastIR2 = HIGH;
 void setup() {
   Serial.begin(115200);
   delay(2000);
-  Serial.println("\n=== ESP32 Aforo v4.0 — Anti-Ruido + Sync ===\n");
+  Serial.println("\n=== ESP32 Seguridad Estante + Sensores v5.0 ===\n");
 
-  pinMode(PIN_IR1, INPUT_PULLUP); // GPIO 33 con pull-up
-  pinMode(PIN_IR2, INPUT_PULLUP); // GPIO 32 con pull-up
+  pinMode(PIN_IR1, INPUT_PULLUP);
+  pinMode(PIN_IR2, INPUT_PULLUP);
   pinMode(PIN_PIR, INPUT);
   pinMode(PIN_MAG, INPUT_PULLUP);
 
   Wire.begin(21, 22);
-  delay(500); // Esperar a que el BH1750 se estabilice
+  delay(500);
   bh1750_ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   if (bh1750_ok) {
     Serial.println("[BH1750] OK");
-    // Descartar primera lectura (puede ser 0.0)
-    float descarte = lightMeter.readLightLevel();
+    lightMeter.readLightLevel();
     delay(200);
   } else {
-    Serial.println(
-        "[BH1750] No detectado - verificar conexiones I2C (SDA=21, SCL=22)");
+    Serial.println("[BH1750] No detectado");
   }
 
   conectarWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setBufferSize(512);
   conectarMQTT();
+
+  // Publicar estado inicial del sensor magnetico al arrancar
+  delay(500);
+  int estInicial = digitalRead(PIN_MAG);
+  lastPuerta = estInicial;
+  bool cerradaInicial = INVERTIR_MAGNETICO ? (estInicial == HIGH) : (estInicial == LOW);
+  Serial.println("[PUERTA] Estado inicial GPIO 13 = " + String(estInicial) + " -> " + String(cerradaInicial ? "CERRADA" : "ABIERTA"));
+  publicar(TOPIC_PUERTA, cerradaInicial ? "0" : "1");
 }
 
 // ═══════════════════════════════════════════
@@ -141,8 +143,8 @@ void loop() {
   }
   mqttClient.loop();
 
-  // Sensores
-  procesarAforo(ahora);
+  // Procesamiento de Sensores
+  procesarCasilleros(ahora);
   procesarPIR(ahora);
   procesarPuerta(ahora);
   procesarLuz(ahora);
@@ -151,7 +153,7 @@ void loop() {
 }
 
 // ═══════════════════════════════════════════
-//  CONEXIÓN
+//  CONEXIONES
 // ═══════════════════════════════════════════
 void conectarWiFi() {
   if (WiFi.status() == WL_CONNECTED)
@@ -187,145 +189,85 @@ void publicar(const char *topic, String val) {
 }
 
 // ═══════════════════════════════════════════
-//  AFORO BIDIRECCIONAL — MÁQUINA DE ESTADOS
+//  PROCESAMIENTO DE ESTANTERÍA SEGURA (IR)
 // ═══════════════════════════════════════════
-/*
- *  Diagrama de estados:
- *
- *       ┌──────────────────────────────────────────┐
- *       │                                          │
- *       ▼                                          │
- *    ┌──────┐   IR1=LOW    ┌────────────┐   IR2=LOW  ┌─────────────┐
- *    │ IDLE │─────────────→│ IR1_ACTIV  │──────────→│ ENTRADA +1  │──┐
- *    └──────┘              └────────────┘           └─────────────┘  │
- *       │                       │ timeout 2s                         │
- *       │                       ▼                                    │
- *       │                  ┌──────────┐                              │
- *       │                  │ CANCELAR │──→ IDLE                      │
- *       │                  └──────────┘                              │
- *       │   IR2=LOW    ┌────────────┐   IR1=LOW  ┌─────────────┐   │
- *       └─────────────→│ IR2_ACTIV  │──────────→│ SALIDA  -1  │───┘
- *                      └────────────┘           └─────────────┘  │
- *                           │ timeout 2s        bloqueo 1500ms   │
- *                           ▼                                    │
- *                      ┌──────────┐                              │
- *                      │ CANCELAR │──→ IDLE                      │
- *                      └──────────┘──────────────────────────────┘
- */
-void procesarAforo(unsigned long ahora) {
-  // Bloqueo global: no procesar tras cruce válido
-  if (ahora - tiempoBloqueo < BLOQUEO_GLOBAL) {
-    return;
+void procesarCasilleros(unsigned long ahora) {
+  int lectura1 = digitalRead(PIN_IR1);
+  int lectura2 = digitalRead(PIN_IR2);
+
+  // Casillero 1 (IR 1)
+  if (lectura1 != lastCasillero1) {
+    if (ahora - lastDebounceIR1 > DEBOUNCE_IR) {
+      lastCasillero1 = lectura1;
+      // LOW = Objeto detectado (Alerta = true), HIGH = Seguro = false
+      bool alerta = (lectura1 == LOW);
+      publicar(TOPIC_CASILLERO1, alerta ? "true" : "false");
+      Serial.println("[ESTANTE] Casillero 1: " + String(alerta ? "ALERTA" : "SEGURO"));
+      lastDebounceIR1 = ahora;
+    }
   }
 
-  int ir1 = digitalRead(PIN_IR1);
-  int ir2 = digitalRead(PIN_IR2);
-
-  switch (estadoAforo) {
-  case IDLE:
-    // Detectar flanco descendente en IR1 (exterior)
-    if (ir1 == LOW && lastIR1 == HIGH) {
-      estadoAforo = IR1_ACTIVADO;
-      tiempoActivacion = ahora;
-      Serial.println("[AFORO] IR1 activado → esperando IR2...");
+  // Casillero 2 (IR 2)
+  if (lectura2 != lastCasillero2) {
+    if (ahora - lastDebounceIR2 > DEBOUNCE_IR) {
+      lastCasillero2 = lectura2;
+      bool alerta = (lectura2 == LOW);
+      publicar(TOPIC_CASILLERO2, alerta ? "true" : "false");
+      Serial.println("[ESTANTE] Casillero 2: " + String(alerta ? "ALERTA" : "SEGURO"));
+      lastDebounceIR2 = ahora;
     }
-    // Detectar flanco descendente en IR2 (interior)
-    else if (ir2 == LOW && lastIR2 == HIGH) {
-      estadoAforo = IR2_ACTIVADO;
-      tiempoActivacion = ahora;
-      Serial.println("[AFORO] IR2 activado → esperando IR1...");
-    }
-    break;
-
-  case IR1_ACTIVADO:
-    // ¿Se activó IR2 dentro de la ventana?
-    if (ir2 == LOW && lastIR2 == HIGH) {
-      // ENTRADA válida
-      contadorAforo++;
-      Serial.println("[AFORO]  ENTRADA +" + String(contadorAforo));
-      publicar(TOPIC_AFORO, String(contadorAforo));
-      estadoAforo = IDLE;
-      tiempoBloqueo = ahora;
-    }
-    // Timeout: cancelar
-    else if (ahora - tiempoActivacion > VENTANA_CRUCE) {
-      Serial.println("[AFORO] Timeout IR1 → cancelado (ruido)");
-      estadoAforo = IDLE;
-    }
-    break;
-
-  case IR2_ACTIVADO:
-    // ¿Se activó IR1 dentro de la ventana?
-    if (ir1 == LOW && lastIR1 == HIGH) {
-      // SALIDA válida
-      contadorAforo--;
-      if (contadorAforo < 0)
-        contadorAforo = 0;
-      Serial.println("[AFORO]  SALIDA " + String(contadorAforo));
-      publicar(TOPIC_AFORO, String(contadorAforo));
-      estadoAforo = IDLE;
-      tiempoBloqueo = ahora;
-    }
-    // Timeout: cancelar
-    else if (ahora - tiempoActivacion > VENTANA_CRUCE) {
-      Serial.println("[AFORO] Timeout IR2 → cancelado (ruido)");
-      estadoAforo = IDLE;
-    }
-    break;
   }
-
-  lastIR1 = ir1;
-  lastIR2 = ir2;
 }
 
 // ═══════════════════════════════════════════
-//  PIR — Independiente de todo
+//  PIR
 // ═══════════════════════════════════════════
 void procesarPIR(unsigned long ahora) {
   bool pir = digitalRead(PIN_PIR) == HIGH;
 
-  // Flanco de subida: movimiento empieza
   if (pir && !last_pir && ahora - lastPir > DEBOUNCE_PIR) {
     publicar(TOPIC_PIR, "true");
     lastPir = ahora;
   }
 
-  // Flanco de bajada: movimiento termina
   if (!pir && last_pir && ahora - lastPir > 2000) {
     publicar(TOPIC_PIR, "false");
   }
 
-  // Actualizar estado global siempre
   last_pir = pir;
 }
 
 // ═══════════════════════════════════════════
-//  PUERTA MAGNÉTICA — 100% Independiente
+//  PUERTA MAGNÉTICA
+//  Sensor NC: cerrada = LOW, abierta = HIGH  (INVERTIR_MAGNETICO = false)
+//  Sensor NO: cerrada = HIGH, abierta = LOW  (INVERTIR_MAGNETICO = true)
 // ═══════════════════════════════════════════
 void procesarPuerta(unsigned long ahora) {
-  if (ahora - lastPuer < DEBOUNCE_PUERTA)
-    return;
   int est = digitalRead(PIN_MAG);
 
-  // Aplicar inversion si es necesario
-  bool cerrada;
-  if (INVERTIR_MAGNETICO) {
-    cerrada = (est == HIGH); // Sensor invertido: HIGH = cerrada
-  } else {
-    cerrada = (est == LOW); // Sensor normal: LOW = cerrada
+  // Reporte de diagnostico periodico en Serial Monitor
+  if (ahora - lastReportePuerta > REPORTE_PUERTA) {
+    lastReportePuerta = ahora;
+    bool cerradaDiag = INVERTIR_MAGNETICO ? (est == HIGH) : (est == LOW);
+    Serial.println("[PUERTA-DIAG] GPIO13=" + String(est) +
+                   " -> " + String(cerradaDiag ? "CERRADA" : "ABIERTA") +
+                   " | INVERTIR=" + String(INVERTIR_MAGNETICO ? "true" : "false"));
   }
 
-  // Enviar solo si hubo cambio de estado
-  if (est != lastPuerta) {
+  // Solo publicar si cambio el estado Y paso el debounce
+  if (est != lastPuerta && ahora - lastPuer > DEBOUNCE_PUERTA) {
+    bool cerrada = INVERTIR_MAGNETICO ? (est == HIGH) : (est == LOW);
     publicar(TOPIC_PUERTA, cerrada ? "0" : "1");
-    Serial.println("[PUERTA] " + String(cerrada ? "CERRADA" : "ABIERTA"));
+    Serial.println("[PUERTA] Cambio detectado: GPIO13=" + String(est) +
+                   " -> " + String(cerrada ? "CERRADA" : "ABIERTA"));
     lastPuerta = est;
+    lastPuer = ahora;
   }
-  lastPuer = ahora;
 }
 
+
 // ═══════════════════════════════════════════
-//  BH1750 LUZ — Aislado
+//  BH1750 LUZ
 // ═══════════════════════════════════════════
 void procesarLuz(unsigned long ahora) {
   if (!bh1750_ok || ahora - lastLuz < INTERVALO_LUZ)

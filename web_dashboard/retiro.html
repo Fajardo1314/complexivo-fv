@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bodega - Smart Stock (Claro)</title>
+    <title>Bodega - Smart Stock</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <style>
@@ -343,7 +343,8 @@
     <div class="modal-overlay" id="loginModal">
         <div class="modal-box">
             <h2>Iniciar Sesión</h2>
-            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:15px;">Debe autenticarse para retirar o devolver productos</p>
+            <p style="color:var(--muted);font-size:0.85rem;margin-bottom:15px;">Debe autenticarse para retirar o
+                devolver productos</p>
             <div class="input-group">
                 <label>Usuario</label>
                 <input type="text" id="loginUser" placeholder="Ingrese su usuario">
@@ -403,8 +404,8 @@
             document.getElementById('pEstado').innerHTML = estado === 'Funcional'
                 ? '<span class="badge badge-green">Funcional</span>'
                 : estado === 'Regular'
-                ? '<span class="badge badge-orange">Regular</span>'
-                : '<span class="badge badge-red">No Funcional</span>';
+                    ? '<span class="badge badge-orange">Regular</span>'
+                    : '<span class="badge badge-red">No Funcional</span>';
             updateStock(prod.stock || 0);
         }
 

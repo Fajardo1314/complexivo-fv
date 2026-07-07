@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Stock - Dashboard Claro</title>
+    <title>Smart Stock</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
@@ -20,7 +20,8 @@
         <div class="login-box glass-panel">
             <div id="formLogin" class="auth-step">
                 <h2>Iniciar Sesión</h2>
-                <p style="color: var(--text-muted); margin-bottom: 20px;">Acceso restringido para personal autorizado</p>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">Acceso restringido para personal autorizado
+                </p>
                 <div class="input-group">
                     <label for="loginUser">Usuario</label>
                     <input type="text" id="loginUser" placeholder="usuario">
@@ -70,7 +71,7 @@
                     <span>Historial de Movimientos</span>
                 </button>
                 <button class="nav-btn" data-target="panel-usuarios" data-roles="SuperAdmin,Docente">
-                    <span>Gestión de Docentes (RFID)</span>
+                    <span>Gestión de Docentes</span>
                 </button>
                 <button class="nav-btn" data-target="panel-usuarios-web" data-roles="SuperAdmin,Docente">
                     <span>Usuarios Plataforma</span>
@@ -78,7 +79,7 @@
                 <button class="nav-btn" data-target="panel-perfil" data-roles="SuperAdmin,Docente,Estudiante">
                     <span>Mi Perfil</span>
                 </button>
-                <button class="nav-btn" data-target="panel-servidor" data-roles="SuperAdmin,Docente">
+                <button class="nav-btn" data-target="panel-servidor" data-roles="SuperAdmin">
                     <span>Servidor</span>
                 </button>
             </nav>
@@ -147,21 +148,29 @@
 
                 <!-- Casilleros Estante Security Widgets -->
                 <div class="glass-panel" style="padding: 20px; margin-bottom: 25px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3>Seguridad de Estante (Sensor IR FC-51)</h3>
                         <div id="modoSeguroArea">
-                            <label style="font-weight: 600; font-size: 0.9rem; margin-right: 10px; color: var(--text-muted);">Retiro Seguro:</label>
-                            <input type="checkbox" id="checkModoSeguro" style="width:18px; height:18px; cursor:pointer;">
+                            <label
+                                style="font-weight: 600; font-size: 0.9rem; margin-right: 10px; color: var(--text-muted);">Retiro
+                                Seguro:</label>
+                            <input type="checkbox" id="checkModoSeguro"
+                                style="width:18px; height:18px; cursor:pointer;">
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="glass-panel" id="widgetCasillero1" style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
+                        <div class="glass-panel" id="widgetCasillero1"
+                            style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
                             <h4 style="font-size: 1.1rem;">Compartimento 1</h4>
-                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero1">SEGURO</p>
+                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero1">SEGURO
+                            </p>
                         </div>
-                        <div class="glass-panel" id="widgetCasillero2" style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
+                        <div class="glass-panel" id="widgetCasillero2"
+                            style="padding: 20px; text-align: center; border-left: 5px solid var(--success);">
                             <h4 style="font-size: 1.1rem;">Compartimento 2</h4>
-                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero2">SEGURO</p>
+                            <p style="font-size: 1.5rem; font-weight: 800; margin-top: 10px;" id="valCasillero2">SEGURO
+                            </p>
                         </div>
                     </div>
                     <div id="alertaEstanteBanner" class="msg msg-err" style="margin-top: 15px; font-weight: 800;"></div>
@@ -170,26 +179,34 @@
                 <!-- Controles de Iluminación y Horarios -->
                 <div class="glass-panel" style="padding: 20px; margin-bottom: 25px;">
                     <h3>Ajustes de Iluminación</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 15px; align-items: center;">
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-top: 15px; align-items: center;">
                         <div>
                             <button id="btnToggleFoco" class="primary-btn">Controlar Iluminacion</button>
-                            <button id="btnAbrirPuertaRemota" class="primary-btn" style="margin-top: 10px; background: #111111;">Abrir Puerta (new-conexion)</button>
+                            <button id="btnAbrirPuertaRemota" class="primary-btn"
+                                style="margin-top: 10px; background: #111111;">Abrir Puerta (new-conexion)</button>
                         </div>
                         <div>
-                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Duración Encendido Foco</label>
+                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Duración
+                                Encendido Foco</label>
                             <div style="display: flex; gap: 10px; margin-top: 5px;">
-                                <input type="number" id="inputTiempoFoco" min="5" value="10" style="width: 70px; padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border);">
-                                <select id="selectUnidadFoco" style="padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
+                                <input type="number" id="inputTiempoFoco" min="5" value="10"
+                                    style="width: 70px; padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border);">
+                                <select id="selectUnidadFoco"
+                                    style="padding: 5px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
                                     <option value="minutos">Minutos</option>
                                     <option value="horas">Horas</option>
                                 </select>
-                                <button id="btnGuardarTiempoFoco" style="padding: 5px 10px; border-radius: 8px; border: none; background: var(--primary); color: white; cursor: pointer; font-weight: bold;">Fijar</button>
+                                <button id="btnGuardarTiempoFoco"
+                                    style="padding: 5px 10px; border-radius: 8px; border: none; background: var(--primary); color: white; cursor: pointer; font-weight: bold;">Fijar</button>
                             </div>
                         </div>
                         <div>
-                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Umbral de Luxes (BH1750)</label>
+                            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Umbral de
+                                Luxes (BH1750)</label>
                             <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
-                                <input type="range" id="umbralLuxSlider" min="0" max="1000" step="5" value="100" style="flex: 1;">
+                                <input type="range" id="umbralLuxSlider" min="0" max="1000" step="5" value="100"
+                                    style="flex: 1;">
                                 <span id="umbralLuxLabel" style="font-weight: bold;">100 lux</span>
                             </div>
                         </div>
@@ -200,13 +217,17 @@
                         <div style="display: flex; gap: 15px; margin-top: 10px; align-items: center; flex-wrap: wrap;">
                             <div class="input-group" style="margin-bottom: 0;">
                                 <label>Hora Inicio</label>
-                                <input type="time" id="inputHoraInicio" value="06:30" style="padding: 6px 12px; width: 130px;">
+                                <input type="time" id="inputHoraInicio" value="06:30"
+                                    style="padding: 6px 12px; width: 130px;">
                             </div>
                             <div class="input-group" style="margin-bottom: 0;">
                                 <label>Hora Fin</label>
-                                <input type="time" id="inputHoraFin" value="22:00" style="padding: 6px 12px; width: 130px;">
+                                <input type="time" id="inputHoraFin" value="22:00"
+                                    style="padding: 6px 12px; width: 130px;">
                             </div>
-                            <button id="btnGuardarHorario" class="primary-btn" style="width: auto; height: 38px; margin-top: 18px; padding: 0 20px;">Guardar Horario</button>
+                            <button id="btnGuardarHorario" class="primary-btn"
+                                style="width: auto; height: 38px; margin-top: 18px; padding: 0 20px;">Guardar
+                                Horario</button>
                         </div>
                     </div>
                 </div>
@@ -214,20 +235,26 @@
 
             <!-- PANEL: INVENTARIO -->
             <section id="panel-inventario" class="panel">
-                <header class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <header class="panel-header"
+                    style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <h1>Inventario Físico del Aula</h1>
                         <p>Búsqueda y control del equipamiento de laboratorio</p>
                     </div>
-                    <button id="btnIrAjustes" class="secondary-btn" style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Ajustes de Inventario</button>
+                    <button id="btnIrAjustes" class="secondary-btn"
+                        style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Ajustes de
+                        Inventario</button>
                 </header>
 
                 <div class="form-container glass-panel" style="margin-bottom: 25px; padding: 20px;">
-                    <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--text-main);">Agregar Producto al Inventario</h2>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
+                    <h2 style="font-size: 1.1rem; margin-bottom: 15px; color: var(--text-main);">Agregar Producto al
+                        Inventario</h2>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>ID Producto</label>
-                            <input type="text" id="invId" placeholder="Autogenerado..." readonly style="background: #f1ebd9; cursor: not-allowed; color:#888;">
+                            <input type="text" id="invId" placeholder="Autogenerado..." readonly
+                                style="background: #f1ebd9; cursor: not-allowed; color:#888;">
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Nombre</label>
@@ -243,17 +270,20 @@
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Carrera</label>
-                            <select id="invCarrera" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
+                            <select id="invCarrera"
+                                style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
                             </select>
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Categoría</label>
-                            <select id="invCategoria" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
+                            <select id="invCategoria"
+                                style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
                             </select>
                         </div>
                         <div class="input-group" style="margin-bottom: 0;">
                             <label>Estado</label>
-                            <select id="invEstado" style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
+                            <select id="invEstado"
+                                style="width:100%; height:38px; border-radius:8px; border:1px solid var(--glass-border); padding: 5px; background: white; font-family: Outfit; font-weight: 500;">
                                 <option value="Funcional">Funcional</option>
                                 <option value="Regular">Regular</option>
                                 <option value="No Funcional">No Funcional</option>
@@ -263,9 +293,11 @@
                     </div>
                 </div>
 
-                <div class="glass-panel" style="padding: 15px 20px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
+                <div class="glass-panel"
+                    style="padding: 15px 20px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center;">
                     <span style="font-weight: 700; color: var(--text-muted);">Buscar:</span>
-                    <input type="text" id="invSearchInput" placeholder="Filtrar por Código o Nombre..." style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); flex: 1;">
+                    <input type="text" id="invSearchInput" placeholder="Filtrar por Código o Nombre..."
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); flex: 1;">
                 </div>
 
                 <div class="table-container glass-panel">
@@ -290,12 +322,14 @@
 
             <!-- PANEL: AJUSTES DE INVENTARIO -->
             <section id="panel-ajustes-inventario" class="panel">
-                <header class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <header class="panel-header"
+                    style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <h1>Ajustes de Inventario</h1>
                         <p>Gestión de Carreras y Categorías configurables en el sistema</p>
                     </div>
-                    <button id="btnVolverInventario" class="secondary-btn" style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Volver a Inventario</button>
+                    <button id="btnVolverInventario" class="secondary-btn"
+                        style="width: auto; margin-top: 0; height: 38px; padding: 0 15px;">Volver a Inventario</button>
                 </header>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
                     <!-- Ajustes Carreras -->
@@ -305,7 +339,8 @@
                             <label>Añadir Nueva Carrera</label>
                             <div style="display: flex; gap: 10px;">
                                 <input type="text" id="inputNuevaCarrera" placeholder="Ej. TAI">
-                                <button class="primary-btn" id="btnAgregarCarrera" style="width: auto; padding: 0 15px;">Añadir</button>
+                                <button class="primary-btn" id="btnAgregarCarrera"
+                                    style="width: auto; padding: 0 15px;">Añadir</button>
                             </div>
                         </div>
                         <ul id="listaAjustesCarreras" style="list-style: none; margin-top: 15px; padding-left: 0;">
@@ -319,7 +354,8 @@
                             <label>Añadir Nueva Categoría</label>
                             <div style="display: flex; gap: 10px;">
                                 <input type="text" id="inputNuevaCategoria" placeholder="Ej. Instrumentación">
-                                <button class="primary-btn" id="btnAgregarCategoria" style="width: auto; padding: 0 15px;">Añadir</button>
+                                <button class="primary-btn" id="btnAgregarCategoria"
+                                    style="width: auto; padding: 0 15px;">Añadir</button>
                             </div>
                         </div>
                         <ul id="listaAjustesCategorias" style="list-style: none; margin-top: 15px; padding-left: 0;">
@@ -337,8 +373,7 @@
                 <div class="search-container glass-panel"
                     style="padding: 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center; justify-content: space-between;">
                     <div style="flex: 1;">
-                        <input type="text" id="qrSearchInput"
-                            placeholder="Buscar por Nombre, ID o Categoría..."
+                        <input type="text" id="qrSearchInput" placeholder="Buscar por Nombre, ID o Categoría..."
                             style="width: 100%; padding: 12px 20px; border-radius: 12px; background: white; border: 1px solid var(--glass-border); color: var(--text-main); font-size: 1rem;">
                     </div>
                     <button class="primary-btn" id="btnExportarPdfLabels"
@@ -357,10 +392,13 @@
                     <p>Accesos RFID y extracciones de productos del aula</p>
                 </header>
 
-                <div class="glass-panel" style="padding: 15px 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center;">
+                <div class="glass-panel"
+                    style="padding: 15px 20px; margin-bottom: 25px; display: flex; gap: 15px; align-items: center;">
                     <span style="font-weight: 700; color: var(--text-muted);">Filtrar por Fecha:</span>
-                    <input type="date" id="filtroFechaMovimientos" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
-                    <button id="btnLimpiarFiltroFecha" class="secondary-btn" style="width: auto; margin-top: 0; padding: 8px 15px; height: 38px;">Limpiar</button>
+                    <input type="date" id="filtroFechaMovimientos"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: white;">
+                    <button id="btnLimpiarFiltroFecha" class="secondary-btn"
+                        style="width: auto; margin-top: 0; padding: 8px 15px; height: 38px;">Limpiar</button>
                 </div>
 
                 <div class="table-container glass-panel" style="margin-bottom: 25px;">
@@ -422,7 +460,8 @@
                         </div>
                         <div class="input-group">
                             <label>Rol / Permiso</label>
-                            <select id="userRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white; font-family: Outfit;">
+                            <select id="userRol"
+                                style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white; font-family: Outfit;">
                                 <option value="Docente">Docente</option>
                                 <option value="SuperAdmin">Super Admin</option>
                                 <option value="Auxiliar">Auxiliar</option>
@@ -482,7 +521,8 @@
                         </div>
                         <div class="input-group">
                             <label>Rol</label>
-                            <select id="webUserRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
+                            <select id="webUserRol"
+                                style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
                                 <option value="SuperAdmin">Super Admin</option>
                                 <option value="Docente">Docente</option>
                                 <option value="Estudiante">Estudiante</option>
@@ -519,41 +559,56 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; align-items: start;">
                     <div class="form-container glass-panel">
                         <div style="text-align: center; margin-bottom: 25px;">
-                            <div style="width: 90px; height: 90px; border-radius: 50%; background: #111111; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);">
+                            <div
+                                style="width: 90px; height: 90px; border-radius: 50%; background: #111111; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);">
                                 <span style="font-size: 2.5rem; color: white;">👤</span>
                             </div>
-                            <h2 id="profileNombre" style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">—</h2>
-                            <span id="profileRol" class="badge badge-green" style="font-size: 0.85rem; padding: 6px 16px;">—</span>
+                            <h2 id="profileNombre"
+                                style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">
+                                —</h2>
+                            <span id="profileRol" class="badge badge-green"
+                                style="font-size: 0.85rem; padding: 6px 16px;">—</span>
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <div
+                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Usuario</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">
+                                        Usuario</p>
                                     <p id="profileUsuario" style="font-size: 1rem; font-weight: 600;">—</p>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <div
+                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Correo</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">
+                                        Correo</p>
                                     <p id="profileCorreo" style="font-size: 1rem; font-weight: 600;">—</p>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <div
+                                style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: rgba(0,0,0,0.04); border-radius: 12px; border: 1px solid var(--glass-border);">
                                 <div>
-                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">ID Operador</p>
-                                    <p id="profileIdOperador" style="font-size: 1rem; font-weight: 600; font-family: monospace;">—</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">
+                                        ID Operador</p>
+                                    <p id="profileIdOperador"
+                                        style="font-size: 1rem; font-weight: 600; font-family: monospace;">—</p>
                                 </div>
                             </div>
                         </div>
 
-                        <button id="btnCerrarSesion" class="primary-btn" style="margin-top: 30px; background: #c0392b;">Cerrar Sesión</button>
+                        <button id="btnCerrarSesion" class="primary-btn"
+                            style="margin-top: 30px; background: #c0392b;">Cerrar Sesión</button>
                     </div>
 
                     <div class="glass-panel" style="padding: 30px;">
-                        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 20px; color: var(--text-main);">Actividad Reciente</h2>
-                        <div id="profileAuditoria" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
-                            <p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de actividad.</p>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 20px; color: var(--text-main);">
+                            Actividad Reciente</h2>
+                        <div id="profileAuditoria"
+                            style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
+                            <p style="color: var(--text-muted); text-align: center; padding: 20px;">No hay registros de
+                                actividad.</p>
                         </div>
                     </div>
                 </div>
@@ -568,11 +623,17 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 25px; align-items: start;">
                     <div class="form-container glass-panel">
                         <h2>Acciones de Control de Hardware</h2>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Control remoto directo de los contenedores Docker y sistema operativo de la Raspberry Pi.</p>
-                        <button class="primary-btn" id="btnRestartServices" style="margin-bottom: 12px; background: #111111;">Reiniciar Servicios (Mosquitto/Nginx)</button>
-                        <button class="primary-btn" id="btnRebootPi" style="margin-bottom: 12px; background: #d35400;">Reiniciar Raspberry Pi</button>
-                        <button class="primary-btn" id="btnShutdownPi" style="background: #c0392b;">Apagar Raspberry Pi</button>
-                        <p id="serverCmdStatus" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);"></p>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">Control remoto
+                            directo de los contenedores Docker y sistema operativo de la Raspberry Pi.</p>
+                        <button class="primary-btn" id="btnRestartServices"
+                            style="margin-bottom: 12px; background: #111111;">Reiniciar Servicios
+                            (Mosquitto/Nginx)</button>
+                        <button class="primary-btn" id="btnRebootPi"
+                            style="margin-bottom: 12px; background: #d35400;">Reiniciar Raspberry Pi</button>
+                        <button class="primary-btn" id="btnShutdownPi" style="background: #c0392b;">Apagar Raspberry
+                            Pi</button>
+                        <p id="serverCmdStatus" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted);">
+                        </p>
                     </div>
                 </div>
             </section>
@@ -586,10 +647,13 @@
             <div class="modal-header">
                 <h2>Movimiento Detectado Fuera de Horario</h2>
             </div>
-            <p style="margin: 15px 0; font-size: 0.95rem;">Se ha detectado movimiento en el aula durante el horario de restricción (10:00 PM a 6:30 AM). ¿Hay alguien dentro de la bodega?</p>
+            <p style="margin: 15px 0; font-size: 0.95rem;">Se ha detectado movimiento en el aula durante el horario de
+                restricción (10:00 PM a 6:30 AM). ¿Hay alguien dentro de la bodega?</p>
             <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
-                <button id="btnPresenciaSi" class="primary-btn" style="width: 100px; background: var(--success);">SÍ</button>
-                <button id="btnPresenciaNo" class="primary-btn" style="width: 100px; background: var(--danger);">NO</button>
+                <button id="btnPresenciaSi" class="primary-btn"
+                    style="width: 100px; background: var(--success);">SÍ</button>
+                <button id="btnPresenciaNo" class="primary-btn"
+                    style="width: 100px; background: var(--danger);">NO</button>
             </div>
         </div>
     </div>
@@ -604,7 +668,8 @@
             <div class="uid-highlight">
                 <span id="modalUidText">00 00 00 00</span>
             </div>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">¿Deseas autorizar esta tarjeta RFID en el sistema?</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">¿Deseas autorizar esta tarjeta
+                RFID en el sistema?</p>
             <div class="modal-form" style="text-align: left;">
                 <div class="input-group">
                     <label>Nombre del Docente</label>
@@ -612,7 +677,8 @@
                 </div>
                 <div class="input-group">
                     <label>Rol / Permiso</label>
-                    <select id="modalUserRol" style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
+                    <select id="modalUserRol"
+                        style="padding: 10px; width: 100%; border-radius: 8px; border:1px solid var(--glass-border); background: white;">
                         <option value="Docente">Docente</option>
                         <option value="SuperAdmin">Super Admin</option>
                         <option value="Auxiliar">Auxiliar</option>
