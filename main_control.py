@@ -568,35 +568,6 @@ SMTP_PASS = "F@jardo123"
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
-@app.route('/send-otp', methods=['POST'])
-def send_otp():
-    import random
-    data = request.json
-    if not data or 'correo' not in data:
-        return jsonify({"error": "Falta correo"}), 400
-    correo = data['correo']
-    codigo = str(random.randint(100000, 999999))
-    db.reference('otp_temp').set({
-        "codigo": codigo,
-        "correo": correo,
-        "expira_en": int(time.time()) + 300,
-        "usado": False
-    })
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["From"] = SMTP_USER
-        msg["To"] = correo
-        msg["Subject"] = "Smart Stock - Codigo de Verificacion"
-        body = f"Tu codigo es: {codigo}"
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.sendmail(SMTP_USER, correo, msg.as_string())
-        return jsonify({"ok": True}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 def main():
     try:
         # Listening threads

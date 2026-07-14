@@ -157,14 +157,14 @@ btnIngresar.addEventListener('click', async () => {
                 crearToast(`Bienvenido ${user.usuario}`, "success");
                 loginOverlay.style.display = 'none';
                 dashboardContainer.style.display = 'flex';
-                
+
                 // Set Profile Details
                 document.getElementById('profileNombre').innerText = user.usuario;
                 document.getElementById('profileRol').innerText = user.rol;
                 document.getElementById('profileUsuario').innerText = user.usuario;
                 document.getElementById('profileCorreo').innerText = user.correo || "—";
                 document.getElementById('profileIdOperador').innerText = user.id_operador || "—";
-                
+
                 // Restrict UI tabs based on roles
                 navBtns.forEach(btn => {
                     const roles = btn.dataset.roles ? btn.dataset.roles.split(',') : [];
@@ -184,7 +184,7 @@ btnIngresar.addEventListener('click', async () => {
                         serverTab.style.display = 'none';
                     }
                 }
-                
+
                 await registrarAuditoria('Login', 'Usuario ingreso a la plataforma');
                 cargarAuditoria();
             } else {
@@ -527,7 +527,7 @@ document.getElementById('btnAgregarCategoria').addEventListener('click', async (
     }
 });
 
-window.eliminarCarrera = async function(car) {
+window.eliminarCarrera = async function (car) {
     const snap = await get(ref(db, 'configuracion/carreras'));
     if (snap.exists()) {
         const data = snap.val();
@@ -539,7 +539,7 @@ window.eliminarCarrera = async function(car) {
     }
 };
 
-window.eliminarCategoria = async function(cat) {
+window.eliminarCategoria = async function (cat) {
     const snap = await get(ref(db, 'configuracion/categorias'));
     if (snap.exists()) {
         const data = snap.val();
@@ -558,7 +558,7 @@ const invSearchInput = document.getElementById('invSearchInput');
 function renderInventario() {
     listaInventario.innerHTML = '';
     const query = invSearchInput.value.toLowerCase().trim();
-    
+
     Object.keys(todosLosProductos).forEach(key => {
         const prod = todosLosProductos[key];
         const nombre = prod.nombre_producto || '—';
@@ -623,7 +623,7 @@ document.getElementById('btnAgregarInventario').addEventListener('click', async 
     });
 
     crearToast("Producto registrado", "success");
-    
+
     // Clear Form
     document.getElementById('invId').value = '';
     document.getElementById('invNombre').value = '';
@@ -631,7 +631,7 @@ document.getElementById('btnAgregarInventario').addEventListener('click', async 
     document.getElementById('invStock').value = '';
 });
 
-window.editarProducto = function(id) {
+window.editarProducto = function (id) {
     const prod = todosLosProductos[id];
     if (prod) {
         document.getElementById('invId').value = id;
@@ -645,7 +645,7 @@ window.editarProducto = function(id) {
     }
 };
 
-window.eliminarProducto = async function(id) {
+window.eliminarProducto = async function (id) {
     if (confirm("¿Estás seguro de eliminar este producto?")) {
         await remove(ref(db, `inventario/${id}`));
         crearToast("Producto eliminado", "success");
@@ -695,36 +695,105 @@ function renderQRAltaPanel() {
 
 qrSearch.addEventListener('input', renderQRAltaPanel);
 
-// Export QRs Selected to PDF (3x4 cm)
-document.getElementById('btnExportarPdfLabels').addEventListener('click', () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-        unit: 'mm',
-        format: [30, 40]
-    });
-
+// Export QRs to PDF - Grid layout (A4 page, 3 columns x 4 rows)
+document.getElementById('btnExportarPdfLabels').addEventListener('click', async () => {
     const checks = document.querySelectorAll('.qr-print-check:checked');
     if (checks.length === 0) {
-        crearToast("Selecciona al menos un código QR para exportar", "danger");
+        crearToast("Selecciona al menos un codigo QR para exportar", "danger");
         return;
     }
 
-    checks.forEach((chk, index) => {
-        const key = chk.dataset.id;
-        const container = document.getElementById(`qr-container-${key}`);
-        if (!container) return;
-        const imgEl = container.querySelector('img');
-        if (imgEl && imgEl.src) {
-            if (index > 0) doc.addPage([30, 40]);
-            doc.addImage(imgEl.src, 'PNG', 3, 2, 24, 24);
-            doc.setFontSize(6);
-            doc.setFont("courier", "bold");
-            doc.text(key, 15, 34, { align: 'center' });
-        }
-    });
+    try {
+        crearToast("Generando PDF...", "info");
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-    doc.save(`etiquetas_seleccionadas.pdf`);
-    crearToast("PDF de etiquetas generado", "success");
+        const pageW = 210, pageH = 297;
+        const margin = 12;
+        const cols = 3;
+        const labelW = (pageW - 2 * margin) / cols;  // ~62mm
+        const labelH = 65;
+        const qrSize = 38;
+        const startY = margin;
+
+        let col = 0, row = 0;
+
+        // Collect all checked QR image sources
+        const items = [];
+        for (const chk of checks) {
+            const key = chk.dataset.id;
+            const container = document.getElementById(`qr-container-${key}`);
+            if (!container) continue;
+            const imgEl = container.querySelector('img');
+            if (imgEl && imgEl.src) {
+                items.push({ key, src: imgEl.src });
+            }
+        }
+
+        if (items.length === 0) {
+            crearToast("No se encontraron codigos QR para exportar", "danger");
+            return;
+        }
+
+        items.forEach((item, idx) => {
+            const x = margin + col * labelW;
+            const y = startY + row * labelH;
+
+            // New page if needed
+            if (y + labelH > pageH - margin && idx > 0) {
+                doc.addPage();
+                col = 0;
+                row = 0;
+            }
+
+            const finalX = margin + col * labelW;
+            const finalY = startY + row * labelH;
+
+            // Header text
+            doc.setFontSize(7);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(30, 30, 30);
+            doc.text("UCUENCA - SMART STOCK", finalX + labelW / 2, finalY + 8, { align: 'center' });
+
+            // QR image (centered)
+            const qrX = finalX + (labelW - qrSize) / 2;
+            doc.addImage(item.src, 'PNG', qrX, finalY + 10, qrSize, qrSize);
+
+            // Product code below QR
+            doc.setFontSize(8);
+            doc.setFont("courier", "bold");
+            doc.setTextColor(30, 30, 30);
+            doc.text(item.key, finalX + labelW / 2, finalY + labelH - 4, { align: 'center' });
+
+            // Dotted cut line (right border)
+            if (col < cols - 1) {
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineDashPattern([2, 2], 0);
+                doc.line(finalX + labelW, finalY + 5, finalX + labelW, finalY + labelH - 5);
+                doc.setLineDashPattern([], 0);
+            }
+
+            // Dotted cut line (bottom border)
+            if (row < 3) {
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineDashPattern([2, 2], 0);
+                doc.line(finalX + 5, finalY + labelH, finalX + labelW - 5, finalY + labelH);
+                doc.setLineDashPattern([], 0);
+            }
+
+            col++;
+            if (col >= cols) {
+                col = 0;
+                row++;
+            }
+        });
+
+        doc.save('etiquetas_qr_inventario.pdf');
+        crearToast("PDF descargado correctamente", "success");
+    } catch (e) {
+        console.error("Error generando PDF:", e);
+        crearToast("Error al generar PDF: " + e.message, "danger");
+    }
 });
 
 // --- HISTORIAL DE MOVIMIENTOS ---
@@ -735,7 +804,7 @@ const btnLimpiarFiltro = document.getElementById('btnLimpiarFiltroFecha');
 
 function filtrarYRenderizarMovimientos() {
     const fechaFiltro = filtroFechaInput.value; // YYYY-MM-DD
-    
+
     // Render Accesos
     listaAccesos.innerHTML = '';
     const accesosFiltrados = todosLosAccesos.filter(acc => {
@@ -743,7 +812,7 @@ function filtrarYRenderizarMovimientos() {
         // Parse acc.hora_ingreso (YYYY-MM-DD HH:MM:SS or DD/MM/YYYY)
         const fechaAcc = acc.hora_ingreso || "";
         if (fechaAcc.includes(fechaFiltro)) return true;
-        
+
         // standard format check
         try {
             const dateParts = fechaAcc.split(" ")[0]; // YYYY-MM-DD
@@ -868,7 +937,7 @@ btnGuardarUsuario.addEventListener('click', async () => {
     userCorreo.value = '';
 });
 
-window.eliminarUsuarioRFID = async function(uid) {
+window.eliminarUsuarioRFID = async function (uid) {
     if (confirm("¿Eliminar acceso a este docente?")) {
         await remove(ref(db, `usuarios/${uid}`));
         crearToast("Acceso revocado", "success");
@@ -922,7 +991,7 @@ btnGuardarWebUsuario.addEventListener('click', async () => {
     webUserCorreo.value = '';
 });
 
-window.eliminarUsuarioWeb = async function(username) {
+window.eliminarUsuarioWeb = async function (username) {
     if (username === "admin") {
         crearToast("No se puede eliminar al administrador principal", "danger");
         return;

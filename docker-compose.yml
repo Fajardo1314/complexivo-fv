@@ -8,6 +8,9 @@ services:
     container_name: backend-control
     restart: unless-stopped
     privileged: true
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - DOCKER_CONTAINER=1
     devices:

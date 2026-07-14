@@ -4,5 +4,3 @@ paho-mqtt
 tuya-connector-python
 #RPi.GPIO
 #mfrc522
-python-kasa
-schedule
