@@ -67,7 +67,6 @@ except Exception as e:
 
 # FIREBASE CONFIGURATION
 OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/"
-NEW_CONEXION_URL = "https://new-conexion-default-rtdb.firebaseio.com/"
 
 try:
     cred = credentials.Certificate('google-services.json')
@@ -95,21 +94,24 @@ def actualizar_monitoreo(datos):
     except Exception as e:
         print(f"[Error Firebase] {e}")
 
-def abrir_chapa():
-    """Abre la chapa electrica local y de la DB companion por 5 segundos."""
-    print("[CHAPA] Abriendo puerta...")
+def abrir_chapa(metodo_acceso="BOTON", usuario_name="Pulsador Salida"):
+    """Abre la chapa electrica local y de la DB unificada por 5 segundos."""
+    print(f"[CHAPA] Abriendo puerta... (Método: {metodo_acceso}, Responsable: {usuario_name})")
     estado_actual["estado_chapa"] = "ABIERTA"
     actualizar_monitoreo({"estado_chapa": "ABIERTA", "estado_puerta": "ABIERTA"})
     
-    # Escribir en companion DB (new-conexion)
+    # Escribir en base unificada (aula-4587b) en el nodo compartido 'puerta'
     try:
-        import urllib.request
-        req = urllib.request.Request(f"{NEW_CONEXION_URL}puerta/estado.json", data=json.dumps("ABIERTA").encode(), method='PUT')
-        urllib.request.urlopen(req, timeout=3)
-        req2 = urllib.request.Request(f"{NEW_CONEXION_URL}puerta/ultimo_cambio.json", data=json.dumps(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")).encode(), method='PUT')
-        urllib.request.urlopen(req2, timeout=3)
+        ref_puerta = db.reference('puerta')
+        ref_puerta.update({
+            "estado": "abierta",
+            "metodo": metodo_acceso,
+            "timestamp": time.time(),
+            "ultimo_acceso": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "usuario_responsable": usuario_name
+        })
     except Exception as e:
-        print(f"[CHAPA Error Companion] {e}")
+        print(f"[CHAPA Error Shared DB] {e}")
         
     GPIO.output(PIN_RELE_CHAPA, GPIO.HIGH)
     time.sleep(5)
@@ -118,15 +120,13 @@ def abrir_chapa():
     estado_actual["estado_chapa"] = "CERRADA"
     actualizar_monitoreo({"estado_chapa": "CERRADA", "estado_puerta": "CERRADA"})
     try:
-        import urllib.request
-        req = urllib.request.Request(f"{NEW_CONEXION_URL}puerta/estado.json", data=json.dumps("CERRADA").encode(), method='PUT')
-        urllib.request.urlopen(req, timeout=3)
+        db.reference('puerta/estado').set("cerrada")
     except Exception as e:
-        print(f"[CHAPA Error Companion] {e}")
+        print(f"[CHAPA Error Shared DB] {e}")
 
 def boton_salida_callback(channel):
     print("[PULSADOR] Boton de salida presionado.")
-    threading.Thread(target=abrir_chapa, daemon=True).start()
+    threading.Thread(target=abrir_chapa, args=("BOTON", "Pulsador Salida"), daemon=True).start()
 
 try:
     GPIO.add_event_detect(PIN_PULSADOR_SALIDA, GPIO.FALLING, callback=boton_salida_callback, bouncetime=500)
@@ -298,19 +298,24 @@ def registrar_permanencia_no_registrado(uid):
     })
 
 def verificar_uid_en_nuestra_db(uid):
-    usuario = db.reference(f'usuarios/{uid}').get()
     ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if usuario:
-        nombre = usuario.get('nombre', 'Docente')
-        rol = usuario.get('rol', 'Docente')
-        print(f"[RFID] Autorizado: {nombre} ({rol})")
+    
+    # Buscar la tarjeta RFID en el nodo tarjetas
+    tarjeta = db.reference(f'tarjetas/{uid}').get()
+    
+    if tarjeta and tarjeta.get('activa', False):
+        nombre = tarjeta.get('nombre', 'Sin nombre')
+        rol = tarjeta.get('rol', 'Docente')
+        propietario = tarjeta.get('propietario', '')
+        print(f"[RFID] Tarjeta autorizada: {nombre} (UID: {uid}, Propietario: {propietario}, Rol: {rol})")
         
         # Registrar permanencia
         db.reference('monitoreo/permanencia').set({
             "activo": True,
             "inicio": ahora_str,
             "usuario": nombre,
-            "uid": uid
+            "uid": uid,
+            "propietario": propietario
         })
         
         # Registrar en accesos
@@ -320,6 +325,7 @@ def verificar_uid_en_nuestra_db(uid):
             "rol": rol,
             "metodo_acceso": "rfid",
             "codigo_usado": uid,
+            "propietario": propietario,
             "hora_ingreso": ahora_str,
             "hora_salida": None,
             "tiempo_permanencia_min": 0,
@@ -329,29 +335,37 @@ def verificar_uid_en_nuestra_db(uid):
         })
         
         # Abrir la chapa remota y local
-        threading.Thread(target=abrir_chapa, daemon=True).start()
+        threading.Thread(target=abrir_chapa, args=(f"RFID:{uid}", nombre), daemon=True).start()
+    elif tarjeta and not tarjeta.get('activa', False):
+        print(f"[RFID] Tarjeta INACTIVA: {uid} ({tarjeta.get('nombre', 'Desconocido')})")
+        registrar_permanencia_no_registrado(uid)
     else:
         print(f"[RFID] UID NO registrado: {uid}. Guardando log como no registrado.")
         registrar_permanencia_no_registrado(uid)
 
-# BACKGROUND THREAD FOR MONITORING NEW-CONEXION DB LATEST UID
-def new_conexion_monitor():
-    print("[NEW-CONEXION MONITOR] Iniciando monitoreo de UIDs leídos en new-conexion...")
-    import urllib.request
-    last_uid = None
-    while True:
+# BACKGROUND THREAD FOR MONITORING UNIFIED DB REMOTE DOOR COMMANDS
+def firebase_puerta_listener():
+    print("[PUERTA-LISTENER] Iniciando escucha de cambios en puerta/estado...")
+    
+    def callback(event):
         try:
-            # Pollear ultimo UID no registrado de new-conexion
-            url = f"{NEW_CONEXION_URL}monitoreo_tiempo_real/ultimo_uid_no_registrado.json"
-            response = urllib.request.urlopen(url, timeout=5)
-            uid = json.loads(response.read().decode())
-            if uid and uid != last_uid:
-                last_uid = uid
-                print(f"[NEW-CONEXION] Nuevo UID recibido de la base companion: {uid}")
-                verificar_uid_en_nuestra_db(uid)
+            nuevo_estado = event.data
+            if nuevo_estado == "abierta":
+                # Validar si chapa esta cerrada actualmente para evitar bucles de retroalimentación
+                if estado_actual["estado_chapa"] == "CERRADA":
+                    print("[PUERTA-LISTENER] Detectado cambio remoto a 'abierta'. Activando chapa...")
+                    # Obtener los metadatos de la apertura remota
+                    metodo = db.reference('puerta/metodo').get() or "RFID/Remoto"
+                    usr = db.reference('puerta/usuario_responsable').get() or "Sistema Externo"
+                    threading.Thread(target=abrir_chapa, args=(metodo, usr), daemon=True).start()
         except Exception as e:
-            pass
-        time.sleep(2)
+            print(f"[PUERTA-LISTENER Error] {e}")
+            
+    try:
+        ref = db.reference('puerta/estado')
+        ref.listen(callback)
+    except Exception as e:
+        print(f"[PUERTA-LISTENER Error] {e}")
 
 # THREAD FOR AUTO SHUTOFF TIMER OF LIGHTS
 def luces_temporizador_monitor():
@@ -476,6 +490,15 @@ def mqtt_sensor_relay():
                 db.reference('monitoreo/estado_puerta').set(estado_str)
                 estado_actual["puerta_fisica_abierta"] = puerta_abierta
                 print(f"[PUERTA MAGNETIC] {estado_str}")
+                
+                # Actualizar el nodo compartido puerta_fisica en minúsculas
+                try:
+                    db.reference('puerta_fisica').update({
+                        "estado": "abierta" if puerta_abierta else "cerrada",
+                        "timestamp": time.time()
+                    })
+                except Exception as e:
+                    print(f"[ERROR Shared puerta_fisica] {e}")
 
             # RFID TOPIC DIRECT FROM HARDWARE
             elif topic == "accesos":
@@ -571,7 +594,7 @@ SMTP_PORT = 587
 def main():
     try:
         # Listening threads
-        threading.Thread(target=new_conexion_monitor, daemon=True).start()
+        threading.Thread(target=firebase_puerta_listener, daemon=True).start()
         threading.Thread(target=luces_temporizador_monitor, daemon=True).start()
         threading.Thread(target=permanencia_inactividad_monitor, daemon=True).start()
         threading.Thread(target=mqtt_sensor_relay, daemon=True).start()

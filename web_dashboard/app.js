@@ -3,12 +3,8 @@ import { getDatabase, ref, onValue, update, remove, set, get, push } from "https
 
 // --- CONFIGURACIÓN FIREBASE ---
 const OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/";
-const ourApp = initializeApp({ databaseURL: OUR_DB_URL }, 'ours');
+const ourApp = initializeApp({ databaseURL: OUR_DB_URL });
 const db = getDatabase(ourApp);
-
-const NEW_CONEXION_DB_URL = "https://new-conexion-default-rtdb.firebaseio.com/";
-const companionApp = initializeApp({ databaseURL: NEW_CONEXION_DB_URL }, 'companion');
-const companionDb = getDatabase(companionApp);
 
 // --- GLOBAL STATE ---
 let usuarioActivo = null;
@@ -17,15 +13,14 @@ let permanenciaInterval = null;
 // Initialize Admin if not exists
 async function inicializarAdmin() {
     try {
-        const adminRef = ref(db, 'usuarios_sistema/admin');
+        const adminRef = ref(db, 'usuarios/admin');
         const snapshot = await get(adminRef);
         if (!snapshot.exists()) {
             await set(adminRef, {
-                usuario: "admin",
-                passwordWeb: "admin123",
+                nombre: "admin",
+                password: "admin123",
                 correo: "smartstock97@gmail.com",
-                rol: "SuperAdmin",
-                id_operador: "ADM_001"
+                rol: "SuperAdmin"
             });
         }
     } catch (e) {
@@ -149,21 +144,21 @@ btnIngresar.addEventListener('click', async () => {
         return;
     }
     try {
-        const snap = await get(ref(db, `usuarios_sistema/${u}`));
+        const snap = await get(ref(db, `usuarios/${u}`));
         if (snap.exists()) {
             const user = snap.val();
-            if (user.passwordWeb === p) {
+            if (user.password === p) {
                 usuarioActivo = user;
                 crearToast(`Bienvenido ${user.usuario}`, "success");
                 loginOverlay.style.display = 'none';
                 dashboardContainer.style.display = 'flex';
 
                 // Set Profile Details
-                document.getElementById('profileNombre').innerText = user.usuario;
+                document.getElementById('profileNombre').innerText = user.nombre;
                 document.getElementById('profileRol').innerText = user.rol;
-                document.getElementById('profileUsuario').innerText = user.usuario;
+                document.getElementById('profileUsuario').innerText = user.nombre;
                 document.getElementById('profileCorreo').innerText = user.correo || "—";
-                document.getElementById('profileIdOperador').innerText = user.id_operador || "—";
+                document.getElementById('profileIdOperador').innerText = "—";
 
                 // Restrict UI tabs based on roles
                 navBtns.forEach(btn => {
@@ -306,17 +301,22 @@ document.getElementById('btnToggleFoco').addEventListener('click', async () => {
     crearToast(`Comando de luz cambiado a ${target}`, "success");
 });
 
-// Door Open Companion command
+// Door Open command
 document.getElementById('btnAbrirPuertaRemota').addEventListener('click', async () => {
     try {
-        await set(ref(companionDb, 'puerta/estado'), "ABIERTA");
-        await set(ref(companionDb, 'puerta/ultimo_cambio'), new Date().toLocaleString());
-        crearToast("Comando de apertura remota enviado a new-conexion", "success");
+        await update(ref(db, 'puerta'), {
+            estado: "abierta",
+            metodo: "WEB",
+            timestamp: Date.now() / 1000,
+            ultimo_acceso: new Date().toLocaleString('es-ES'),
+            usuario_responsable: (usuarioActivo && usuarioActivo.usuario) || "Dashboard Web"
+        });
+        crearToast("Comando de apertura enviado con éxito", "success");
         setTimeout(async () => {
-            await set(ref(companionDb, 'puerta/estado'), "CERRADA");
+            await set(ref(db, 'puerta/estado'), "cerrada");
         }, 5000);
     } catch (e) {
-        crearToast("Error al enviar comando companion", "danger");
+        crearToast("Error al enviar comando", "danger");
     }
 });
 

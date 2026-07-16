@@ -465,14 +465,14 @@
             document.getElementById('btnLogin').disabled = true;
 
             try {
-                const snapshot = await get(ref(db, 'usuarios_sistema'));
+                const snapshot = await get(ref(db, 'usuarios'));
                 if (snapshot.exists()) {
                     const users = snapshot.val();
                     for (const key of Object.keys(users)) {
                         const u = users[key];
-                        if (!u || !u.usuario) continue;
-                        if (u.usuario === user && u.passwordWeb === pass) {
-                            usuarioActivo = u;
+                        if (!u || !u.nombre) continue;
+                        if (key === user && u.password === pass) {
+                            usuarioActivo = { ...u, usuario: key };
                             break;
                         }
                     }
