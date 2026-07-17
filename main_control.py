@@ -113,34 +113,57 @@ def actualizar_monitoreo(datos):
         print(f"[Error Firebase] {e}")
 
 def abrir_chapa(metodo_acceso="BOTON", usuario_name="Pulsador Salida"):
-    """Abre la chapa electrica local y de la DB unificada por 5 segundos."""
-    print(f"[CHAPA] Abriendo puerta... (Método: {metodo_acceso}, Responsable: {usuario_name})")
+    """Abre la chapa electrica local y sincroniza estado en ambas DBs."""
+    print(f"[CHAPA] Abriendo puerta... (Metodo: {metodo_acceso}, Responsable: {usuario_name})")
     estado_actual["estado_chapa"] = "ABIERTA"
     actualizar_monitoreo({"estado_chapa": "ABIERTA", "estado_puerta": "ABIERTA"})
-    
-    # Escribir en base unificada (aula-4587b) en el nodo compartido 'puerta'
+
+    puerta_data = {
+        "estado": "abierta",
+        "metodo": metodo_acceso,
+        "timestamp": time.time(),
+        "ultimo_acceso": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "usuario_responsable": usuario_name
+    }
+
+    # Escribir en NUESTRA DB (complexivo-fv)
     try:
-        ref_puerta = db.reference('puerta')
-        ref_puerta.update({
-            "estado": "abierta",
-            "metodo": metodo_acceso,
-            "timestamp": time.time(),
-            "ultimo_acceso": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "usuario_responsable": usuario_name
-        })
+        db.reference('puerta').update(puerta_data)
+        print("[CHAPA] Puerta actualizada en complexivo-fv")
     except Exception as e:
-        print(f"[CHAPA Error Shared DB] {e}")
-        
+        print(f"[CHAPA Error] Nuestra DB: {e}")
+
+    # Escribir en la DB del OTRO grupo (aula-4587b)
+    try:
+        shared_app = get_shared_db()
+        if shared_app:
+            db.reference('puerta', app=shared_app).update(puerta_data)
+            print("[CHAPA] Puerta sincronizada en aula-4587b")
+    except Exception as e:
+        print(f"[CHAPA Error] DB compartida: {e}")
+
     GPIO.output(PIN_RELE_CHAPA, GPIO.HIGH)
     time.sleep(5)
     print("[CHAPA] Cerrando puerta...")
     GPIO.output(PIN_RELE_CHAPA, GPIO.LOW)
     estado_actual["estado_chapa"] = "CERRADA"
     actualizar_monitoreo({"estado_chapa": "CERRADA", "estado_puerta": "CERRADA"})
+
+    cerrada_data = {"estado": "cerrada", "timestamp": time.time()}
+
     try:
         db.reference('puerta/estado').set("cerrada")
+        db.reference('puerta/timestamp').set(time.time())
     except Exception as e:
-        print(f"[CHAPA Error Shared DB] {e}")
+        print(f"[CHAPA Error] Nuestra DB: {e}")
+
+    try:
+        shared_app = get_shared_db()
+        if shared_app:
+            db.reference('puerta', app=shared_app).update(cerrada_data)
+            print("[CHAPA] Cierre sincronizado en aula-4587b")
+    except Exception as e:
+        print(f"[CHAPA Error] DB compartida: {e}")
 
 def boton_salida_callback(channel):
     print("[PULSADOR] Boton de salida presionado.")
@@ -456,6 +479,61 @@ def firebase_puerta_listener():
     except Exception as e:
         print(f"[PUERTA-LISTENER Error] {e}")
 
+# THREAD: SINCRONIZACION DE PUERTA CON aula-4587b (TIEMPO REAL)
+def sync_puerta_aula_listener():
+    """Escucha cambios en aula-4587b/puerta y sincroniza con nuestro estado."""
+    print("[SYNC-PUERTA-AULA] Iniciando escucha de puerta del otro grupo...")
+
+    def callback(event):
+        try:
+            data = event.data
+            if isinstance(data, dict):
+                estado = data.get("estado", "")
+                metodo = data.get("metodo", "")
+                usuario = data.get("usuario_responsable", "")
+                timestamp = data.get("timestamp", 0)
+            elif isinstance(data, str):
+                estado = data
+                metodo = ""
+                usuario = ""
+                timestamp = 0
+            else:
+                return
+
+            print(f"[SYNC-PUERTA-AULA] Cambio detectado: estado={estado}, metodo={metodo}, usuario={usuario}")
+
+            # Sincronizar estado de puerta en nuestro monitoreo
+            if estado in ("abierta", "cerrada"):
+                estado_nuestro = "ABIERTA" if estado == "abierta" else "CERRADA"
+                db.reference('monitoreo/estado_puerta').set(estado_nuestro)
+                db.reference('monitoreo/puerta').set(estado == "abierta")
+
+                # Actualizar estado local si la chapa esta cerrada
+                if estado == "abierta" and estado_actual["estado_chapa"] == "CERRADA":
+                    print("[SYNC-PUERTA-AULA] Puerta del otro grupo abierta, registrando...")
+                    db.reference('accesos').push({
+                        "exitoso": True,
+                        "fecha_hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "identificador_usuario": usuario,
+                        "metodo": f"AULA-4587B:{metodo}",
+                        "motivo": f"Apertura desde aula-4587b por {usuario}",
+                        "perfil": {"nombre": usuario, "rol": "aula-4587b"},
+                        "timestamp": timestamp or time.time()
+                    })
+        except Exception as e:
+            print(f"[SYNC-PUERTA-AULA Error] {e}")
+
+    try:
+        shared_app = get_shared_db()
+        if shared_app:
+            ref = db.reference('puerta', app=shared_app)
+            ref.listen(callback)
+            print("[SYNC-PUERTA-AULA] Escucha activa en aula-4587b/puerta")
+        else:
+            print("[SYNC-PUERTA-AULA] DB compartida no disponible, escucha desactivada")
+    except Exception as e:
+        print(f"[SYNC-PUERTA-AULA Error] {e}")
+
 # THREAD FOR AUTO SHUTOFF TIMER OF LIGHTS
 def luces_temporizador_monitor():
     while True:
@@ -680,13 +758,12 @@ def main():
     try:
         # Listening threads
         threading.Thread(target=firebase_puerta_listener, daemon=True).start()
+        threading.Thread(target=sync_puerta_aula_listener, daemon=True).start()
         threading.Thread(target=luces_temporizador_monitor, daemon=True).start()
         threading.Thread(target=permanencia_inactividad_monitor, daemon=True).start()
         threading.Thread(target=mqtt_sensor_relay, daemon=True).start()
         threading.Thread(target=firebase_foco_listener, daemon=True).start()
-        # Sync thread desactivado para evitar flickering del foco
-        # threading.Thread(target=tuya_estado_sincronizador, daemon=True).start()
-        print("[MAIN] Sync thread desactivado. Foco controlado solo desde dashboard/PIR.")
+        print("[MAIN] Todos los threads iniciados (incluido sync puerta aula-4587b)")
         app.run(host='0.0.0.0', port=5000, use_reloader=False)
     except KeyboardInterrupt:
         pass
