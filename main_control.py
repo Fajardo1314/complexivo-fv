@@ -356,22 +356,25 @@ def registrar_permanencia_no_registrado(uid):
 def verificar_uid_en_nuestra_db(uid):
     ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Buscar la tarjeta RFID en la DB COMPARTIDA (aula-4587b)
+    # Buscar la tarjeta RFID en NUESTRA DB primero (prioridad propia)
     tarjeta = None
     try:
-        shared_app = get_shared_db()
-        if shared_app:
-            tarjeta = db.reference(f'tarjetas/{uid}', app=shared_app).get()
-            if tarjeta:
-                print(f"[RFID] Tarjeta encontrada en DB compartida: {uid}")
-    except Exception as e:
-        print(f"[RFID] Error leyendo DB compartida: {e}")
-    
-    # Fallback: buscar en nuestra DB
-    if not tarjeta:
         tarjeta = db.reference(f'tarjetas/{uid}').get()
         if tarjeta:
             print(f"[RFID] Tarjeta encontrada en nuestra DB: {uid}")
+    except Exception as e:
+        print(f"[RFID] Error leyendo nuestra DB: {e}")
+
+    # Fallback: buscar en la DB COMPARTIDA (aula-4587b) - SOLO LECTURA
+    if not tarjeta:
+        try:
+            shared_app = get_shared_db()
+            if shared_app:
+                tarjeta = db.reference(f'tarjetas/{uid}', app=shared_app).get()
+                if tarjeta:
+                    print(f"[RFID] Tarjeta encontrada en DB compartida (fallback): {uid}")
+        except Exception as e:
+            print(f"[RFID] Error leyendo DB compartida: {e}")
     
     if tarjeta and tarjeta.get('activa', False):
         nombre = tarjeta.get('nombre', 'Sin nombre')
@@ -580,15 +583,6 @@ def mqtt_sensor_relay():
                 db.reference('monitoreo/estado_puerta').set(estado_str)
                 estado_actual["puerta_fisica_abierta"] = puerta_abierta
                 print(f"[PUERTA MAGNETIC] {estado_str}")
-                
-                # Actualizar el nodo compartido puerta_fisica en minúsculas
-                try:
-                    db.reference('puerta_fisica').update({
-                        "estado": "abierta" if puerta_abierta else "cerrada",
-                        "timestamp": time.time()
-                    })
-                except Exception as e:
-                    print(f"[ERROR Shared puerta_fisica] {e}")
 
             # RFID TOPIC DIRECT FROM HARDWARE
             elif topic == "accesos":

@@ -1,0 +1,9 @@
+# Credenciales y secretos
+credentials.py
+google-services.json
+aula-4587b-firebase-adminsdk-fbsvc-7b1a51cecd.json
+data_base.zip
+archivos_excluidos_github/
+__pycache__/
+*.pyc
+.venv/
