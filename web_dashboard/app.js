@@ -945,7 +945,7 @@ window.eliminarUsuarioRFID = async function (uid) {
 };
 
 // Web Users
-onValue(ref(db, 'usuarios_sistema'), (snapshot) => {
+onValue(ref(db, 'usuarios'), (snapshot) => {
     listaUsuariosWeb.innerHTML = '';
     const data = snapshot.val();
     if (data) {
@@ -953,9 +953,9 @@ onValue(ref(db, 'usuarios_sistema'), (snapshot) => {
             const usr = data[key];
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><span style="font-family:monospace; font-weight:700;">${usr.id_operador || "—"}</span></td>
-                <td><strong>${usr.usuario}</strong></td>
-                <td>${usr.correo}</td>
+                <td><span style="font-family:monospace; font-weight:700;">${key}</span></td>
+                <td><strong>${usr.nombre}</strong></td>
+                <td>${usr.email || "---"}</td>
                 <td><span class="badge badge-green">${usr.rol}</span></td>
                 <td>
                     <button class="delete-btn" onclick="eliminarUsuarioWeb('${key}')">Eliminar</button>
@@ -967,21 +967,20 @@ onValue(ref(db, 'usuarios_sistema'), (snapshot) => {
 });
 
 btnGuardarWebUsuario.addEventListener('click', async () => {
-    const op = webUserOperatorId.value.trim();
     const usr = webUserUsername.value.trim();
     const pass = webUserPassword.value.trim();
+    const nom = webUserOperatorId.value.trim() || usr;
     const corr = webUserCorreo.value.trim();
     const rol = webUserRol.value;
 
-    if (!op || !usr || !pass) {
-        crearToast("ID, usuario y contraseña son requeridos", "danger");
+    if (!usr || !pass) {
+        crearToast("Usuario y contraseña son requeridos", "danger");
         return;
     }
-    await set(ref(db, `usuarios_sistema/${usr}`), {
-        id_operador: op,
-        usuario: usr,
-        passwordWeb: pass,
-        correo: corr,
+    await set(ref(db, `usuarios/${usr}`), {
+        nombre: nom,
+        password: pass,
+        email: corr,
         rol: rol
     });
     crearToast("Usuario registrado con éxito", "success");
@@ -996,9 +995,9 @@ window.eliminarUsuarioWeb = async function (username) {
         crearToast("No se puede eliminar al administrador principal", "danger");
         return;
     }
-    if (confirm(`¿Eliminar cuenta web de ${username}?`)) {
-        await remove(ref(db, `usuarios_sistema/${username}`));
-        crearToast("Cuenta web eliminada", "success");
+    if (confirm(`¿Eliminar cuenta de ${username}?`)) {
+        await remove(ref(db, `usuarios/${username}`));
+        crearToast("Cuenta eliminada", "success");
     }
 };
 

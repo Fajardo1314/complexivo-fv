@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir RPi.GPIO spidev mfrc522
 COPY main_control.py .
 COPY credentials.py .
 COPY google-services.json .
+COPY aula-4587b-firebase-adminsdk-fbsvc-7b1a51cecd.json .
 
 EXPOSE 5000
 

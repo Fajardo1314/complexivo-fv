@@ -67,6 +67,7 @@ except Exception as e:
 
 # FIREBASE CONFIGURATION
 OUR_DB_URL = "https://complexivo-fv-default-rtdb.firebaseio.com/"
+SHARED_DB_URL = "https://aula-4587b-default-rtdb.firebaseio.com/"
 
 try:
     cred = credentials.Certificate('google-services.json')
@@ -74,9 +75,26 @@ try:
         firebase_admin.initialize_app(cred, {
             'databaseURL': OUR_DB_URL
         })
-    print(f"[Firebase] Conectado a: {OUR_DB_URL}")
+    print(f"[Firebase] Nuestra DB (default): {OUR_DB_URL}")
 except Exception as e:
     print(f"[ERROR Firebase] google-services.json: {e}")
+
+# Firebase App para la base compartida (aula-4587b) - solo lectura RFID
+try:
+    shared_cred = credentials.Certificate('aula-4587b-firebase-adminsdk-fbsvc-7b1a51cecd.json')
+    firebase_admin.initialize_app(shared_cred, {
+        'databaseURL': SHARED_DB_URL
+    }, name='sharedApp')
+    print(f"[Firebase] DB compartida (RFID): {SHARED_DB_URL}")
+except Exception as e:
+    print(f"[WARNING] No se pudo conectar a DB compartida: {e}")
+
+def get_shared_db():
+    """Obtiene referencia a la DB compartida aula-4587b"""
+    try:
+        return firebase_admin.get_app('sharedApp')
+    except ValueError:
+        return None
 
 # GLOBAL STATE
 estado_actual = {
@@ -273,6 +291,25 @@ def tuya_estado_sincronizador():
 # MQTT SENSOR RELAY
 mqtt_pub_client = None
 
+def registrar_acceso_shared_db(uid, exitoso, metodo, motivo, perfil=None, identificador_usuario=""):
+    """Registra un acceso en la DB compartida aula-4587b con la estructura estandar."""
+    try:
+        shared_app = get_shared_db()
+        if shared_app:
+            shared_db = db.reference('accesos', app=shared_app)
+            shared_db.push({
+                "exitoso": exitoso,
+                "fecha_hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "identificador_usuario": identificador_usuario,
+                "metodo": metodo,
+                "motivo": motivo,
+                "perfil": perfil or {},
+                "timestamp": time.time()
+            })
+            print(f"[SHARED-DB] Acceso registrado en aula-4587b: {motivo}")
+    except Exception as e:
+        print(f"[SHARED-DB Error] {e}")
+
 def registrar_permanencia_no_registrado(uid):
     ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.reference('monitoreo/permanencia').set({
@@ -282,26 +319,39 @@ def registrar_permanencia_no_registrado(uid):
         "uid": uid
     })
     
-    # Registrar log en historial
-    ref_accesos = db.reference('accesos')
-    ref_accesos.push({
-        "docente": "USUARIO NO REGISTRADO",
-        "rol": "Desconocido",
-        "metodo_acceso": "rfid",
-        "codigo_usado": uid,
-        "hora_ingreso": ahora_str,
-        "hora_salida": None,
-        "tiempo_permanencia_min": 0,
-        "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
-        "saca_producto": False,
-        "producto_extraido_id": ""
+    # Registrar en accesos (nuestra DB con estructura de aula-4587b)
+    db.reference('accesos').push({
+        "exitoso": False,
+        "fecha_hora": ahora_str,
+        "identificador_usuario": "",
+        "metodo": f"RFID:{uid}",
+        "motivo": "Tarjeta no registrada",
+        "perfil": {},
+        "timestamp": time.time()
     })
+    
+    # Tambien registrar en la DB compartida
+    registrar_acceso_shared_db(uid, False, f"RFID:{uid}", "Tarjeta no registrada")
 
 def verificar_uid_en_nuestra_db(uid):
     ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Buscar la tarjeta RFID en el nodo tarjetas
-    tarjeta = db.reference(f'tarjetas/{uid}').get()
+    # Buscar la tarjeta RFID en la DB COMPARTIDA (aula-4587b)
+    tarjeta = None
+    try:
+        shared_app = get_shared_db()
+        if shared_app:
+            tarjeta = db.reference(f'tarjetas/{uid}', app=shared_app).get()
+            if tarjeta:
+                print(f"[RFID] Tarjeta encontrada en DB compartida: {uid}")
+    except Exception as e:
+        print(f"[RFID] Error leyendo DB compartida: {e}")
+    
+    # Fallback: buscar en nuestra DB
+    if not tarjeta:
+        tarjeta = db.reference(f'tarjetas/{uid}').get()
+        if tarjeta:
+            print(f"[RFID] Tarjeta encontrada en nuestra DB: {uid}")
     
     if tarjeta and tarjeta.get('activa', False):
         nombre = tarjeta.get('nombre', 'Sin nombre')
@@ -318,27 +368,42 @@ def verificar_uid_en_nuestra_db(uid):
             "propietario": propietario
         })
         
-        # Registrar en accesos
-        ref_accesos = db.reference('accesos')
-        ref_accesos.push({
-            "docente": nombre,
-            "rol": rol,
-            "metodo_acceso": "rfid",
-            "codigo_usado": uid,
-            "propietario": propietario,
-            "hora_ingreso": ahora_str,
-            "hora_salida": None,
-            "tiempo_permanencia_min": 0,
-            "acompanantes_al_ingresar": estado_actual["personas_dentro_actualmente"],
-            "saca_producto": False,
-            "producto_extraido_id": ""
+        # Registrar en accesos (nuestra DB con estructura de aula-4587b)
+        perfil = {"nombre": nombre, "rol": rol}
+        db.reference('accesos').push({
+            "exitoso": True,
+            "fecha_hora": ahora_str,
+            "identificador_usuario": propietario,
+            "metodo": f"RFID:{uid}",
+            "motivo": f"RFID verificado de {nombre}",
+            "perfil": perfil,
+            "timestamp": time.time()
         })
+        
+        # Tambien registrar en la DB compartida
+        registrar_acceso_shared_db(uid, True, f"RFID:{uid}", f"RFID verificado de {nombre}", perfil, propietario)
         
         # Abrir la chapa remota y local
         threading.Thread(target=abrir_chapa, args=(f"RFID:{uid}", nombre), daemon=True).start()
     elif tarjeta and not tarjeta.get('activa', False):
-        print(f"[RFID] Tarjeta INACTIVA: {uid} ({tarjeta.get('nombre', 'Desconocido')})")
-        registrar_permanencia_no_registrado(uid)
+        nombre = tarjeta.get('nombre', 'Desconocido')
+        print(f"[RFID] Tarjeta INACTIVA: {uid} ({nombre})")
+        db.reference('monitoreo/permanencia').set({
+            "activo": True,
+            "inicio": ahora_str,
+            "usuario": nombre,
+            "uid": uid
+        })
+        db.reference('accesos').push({
+            "exitoso": False,
+            "fecha_hora": ahora_str,
+            "identificador_usuario": "",
+            "metodo": f"RFID:{uid}",
+            "motivo": f"Tarjeta inactiva: {nombre}",
+            "perfil": {"nombre": nombre, "rol": tarjeta.get('rol', '')},
+            "timestamp": time.time()
+        })
+        registrar_acceso_shared_db(uid, False, f"RFID:{uid}", f"Tarjeta inactiva: {nombre}")
     else:
         print(f"[RFID] UID NO registrado: {uid}. Guardando log como no registrado.")
         registrar_permanencia_no_registrado(uid)
