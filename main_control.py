@@ -122,7 +122,7 @@ def abrir_chapa(metodo_acceso="BOTON", usuario_name="Pulsador Salida"):
         "estado": "abierta",
         "metodo": metodo_acceso,
         "timestamp": time.time(),
-        "ultimo_acceso": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ultimo_acceso": usuario_name,
         "usuario_responsable": usuario_name
     }
 
@@ -137,6 +137,7 @@ def abrir_chapa(metodo_acceso="BOTON", usuario_name="Pulsador Salida"):
     try:
         shared_app = get_shared_db()
         if shared_app:
+            _ultima_escritura_externa = time.time()
             db.reference('puerta', app=shared_app).update(puerta_data)
             print("[CHAPA] Puerta sincronizada en aula-4587b")
     except Exception as e:
@@ -160,6 +161,7 @@ def abrir_chapa(metodo_acceso="BOTON", usuario_name="Pulsador Salida"):
     try:
         shared_app = get_shared_db()
         if shared_app:
+            _ultima_escritura_externa = time.time()
             db.reference('puerta', app=shared_app).update(cerrada_data)
             print("[CHAPA] Cierre sincronizado en aula-4587b")
     except Exception as e:
@@ -480,13 +482,20 @@ def firebase_puerta_listener():
         print(f"[PUERTA-LISTENER Error] {e}")
 
 # THREAD: SINCRONIZACION DE PUERTA CON aula-4587b (TIEMPO REAL)
+_ultima_escritura_externa = 0
+
 def sync_puerta_aula_listener():
     """Escucha cambios en aula-4587b/puerta y sincroniza con nuestro estado."""
+    global _ultima_escritura_externa
     print("[SYNC-PUERTA-AULA] Iniciando escucha de puerta del otro grupo...")
 
     def callback(event):
+        global _ultima_escritura_externa
         try:
             data = event.data
+            if data is None:
+                return
+
             if isinstance(data, dict):
                 estado = data.get("estado", "")
                 metodo = data.get("metodo", "")
@@ -500,6 +509,10 @@ def sync_puerta_aula_listener():
             else:
                 return
 
+            # Ignorar cambios que NOSOTROS mismos escribimos (evitar bucle)
+            if time.time() - _ultima_escritura_externa < 3:
+                return
+
             print(f"[SYNC-PUERTA-AULA] Cambio detectado: estado={estado}, metodo={metodo}, usuario={usuario}")
 
             # Sincronizar estado de puerta en nuestro monitoreo
@@ -508,9 +521,9 @@ def sync_puerta_aula_listener():
                 db.reference('monitoreo/estado_puerta').set(estado_nuestro)
                 db.reference('monitoreo/puerta').set(estado == "abierta")
 
-                # Actualizar estado local si la chapa esta cerrada
-                if estado == "abierta" and estado_actual["estado_chapa"] == "CERRADA":
-                    print("[SYNC-PUERTA-AULA] Puerta del otro grupo abierta, registrando...")
+                # Solo registrar en nuestros accesos si NO viene de nuestro RFID/BOTON
+                if estado == "abierta" and "RFID" not in metodo and "BOTON" not in metodo:
+                    print("[SYNC-PUERTA-AULA] Apertura remota detectada, registrando...")
                     db.reference('accesos').push({
                         "exitoso": True,
                         "fecha_hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
