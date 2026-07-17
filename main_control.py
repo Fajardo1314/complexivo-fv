@@ -223,6 +223,7 @@ def firebase_foco_listener():
 
     def callback(event):
         nonlocal last_value
+        global tuya_manual_override, tuya_last_manual_time
         try:
             nuevo_estado = event.data
             if nuevo_estado != last_value:
