@@ -49,6 +49,21 @@ async function registrarAuditoria(accion, detalles) {
 const navBtns = document.querySelectorAll('.nav-btn');
 const panels = document.querySelectorAll('.panel');
 
+// --- TAB NAVIGATION ---
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.dataset.target;
+        if (!target) return;
+        panels.forEach(p => p.classList.remove('active'));
+        const targetPanel = document.getElementById(target);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+        navBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
 const estadoPir = document.getElementById('estadoPir');
 const subAlerta = document.getElementById('subAlerta');
 const cardAlerta = document.getElementById('cardAlerta');
