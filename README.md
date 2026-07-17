@@ -12,7 +12,7 @@ Este repositorio contiene todo el código para el sistema integral de gestión d
 
 ## 🔥 Paso 1: Configurar la Base de Datos Firebase
 
-Como se trata de un sistema conectado a la nube, necesitas crear el proyecto en Firebase con tu cuenta (`jomayra.valdez6@ucuenca.edu.ec`):
+Como se trata de un sistema conectado a la nube, necesitas crear el proyecto en Firebase con tu cuenta (`margaritafajardo1@hotmail.com`):
 
 1. Ve a [Firebase Console](https://console.firebase.google.com/) e inicia sesión con tu correo.
 2. Haz clic en **"Agregar proyecto"** y nómbralo `proyecto-grado`.
