@@ -152,8 +152,8 @@ except Exception as e:
     print(f"[WARNING] Event_detect error: {e}")
 
 # TUYA SMART SWITCH CONTROL
-TUYA_ACCESS_ID = "4cg753npk9gxtjwnqr7y"
-TUYA_ACCESS_SECRET = "a5e813311035455eab6f92a8d7786ca0"
+TUYA_ACCESS_ID = "q5str3ud7gagdegw3qqu"
+TUYA_ACCESS_SECRET = "13428eb701af49b4b7a32e2b3a8a19a6"
 TUYA_DEVICE_ID = "eb98686bb984169ea7dgfq"
 TUYA_ENDPOINT = "https://openapi.tuyaus.com"
 
@@ -169,8 +169,12 @@ def inicializar_tuya():
         print(f"[Tuya Error] {e}")
         tuya_api = None
 
-def tuya_toggle_foco(encender):
-    global tuya_api
+tuya_last_command_time = 0
+tuya_manual_override = False  # True when user manually toggles from dashboard
+tuya_last_manual_time = 0
+
+def tuya_toggle_foco(encender, manual=False):
+    global tuya_api, tuya_last_command_time, tuya_manual_override, tuya_last_manual_time
     if tuya_api is None:
         inicializar_tuya()
     if tuya_api is None:
@@ -181,7 +185,11 @@ def tuya_toggle_foco(encender):
             commands = {"commands": [{"code": codigo, "value": encender}]}
             response = tuya_api.post(f"/v1.0/devices/{TUYA_DEVICE_ID}/commands", commands)
             if response.get("success"):
-                print(f"[Tuya] Foco -> {'ON' if encender else 'OFF'}")
+                tuya_last_command_time = time.time()
+                if manual:
+                    tuya_manual_override = True
+                    tuya_last_manual_time = time.time()
+                print(f"[Tuya] Foco -> {'ON' if encender else 'OFF'} (manual={manual})")
                 return True
         except:
             continue
@@ -220,6 +228,14 @@ def firebase_foco_listener():
             if nuevo_estado != last_value:
                 last_value = nuevo_estado
                 
+                # Skip if manual override is active (user clicked dashboard button)
+                if tuya_manual_override:
+                    if time.time() - tuya_last_manual_time < 30:
+                        print("[FOCO-LISTENER] Manual override activo, saltando auto-control")
+                        return
+                    else:
+                        tuya_manual_override = False
+                
                 # Validar horario
                 if not _es_horario_iluminacion() and nuevo_estado == "ENCENDIDO":
                     print("[FOCO-LISTENER] Intento de encendido fuera de horario denegado.")
@@ -227,7 +243,7 @@ def firebase_foco_listener():
                     return
                 
                 encender = nuevo_estado == "ENCENDIDO"
-                tuya_toggle_foco(encender)
+                tuya_toggle_foco(encender, manual=True)
         except Exception as e:
             print(f"[FOCO-LISTENER Error] {e}")
 
@@ -269,14 +285,18 @@ def tuya_estado_sincronizador():
                     break
 
             if estado_tuya is None:
-                time.sleep(3)
+                time.sleep(5)
                 continue
 
             estado_str = "ENCENDIDO" if estado_tuya else "APAGADO"
 
-            # Solo actualizar Firebase si el estado cambio fisicamente
+            # Solo actualizar Firebase si el estado cambio fisicamente Y no hay comando reciente
+            # Esto evita el loop: sync escribe -> listener recibe -> envia comando -> sync escribe de nuevo
             if estado_str != last_estado_tuya:
                 last_estado_tuya = estado_str
+                # Skip sync for 30 seconds after a command was sent (avoid loop)
+                if time.time() - tuya_last_command_time < 30:
+                    continue
                 # Leer el estado actual en Firebase para evitar loop de escritura
                 estado_firebase = db.reference('estado_foco').get()
                 if estado_firebase != estado_str:
@@ -285,7 +305,7 @@ def tuya_estado_sincronizador():
         except Exception as e:
             print(f"[TUYA-SYNC Error] {e}")
             tuya_api = None  # Forzar reconexion en la siguiente iteracion
-        time.sleep(3)
+        time.sleep(10)
 
 
 # MQTT SENSOR RELAY
@@ -436,15 +456,18 @@ def firebase_puerta_listener():
 def luces_temporizador_monitor():
     while True:
         try:
-            # Obtener tiempo de encendido configurado
+            # Obtener tiempo de encendido configurado (minimo 30 minutos por defecto)
             temp_config = db.reference('configuracion/tiempo_encendido_luces').get()
             if not temp_config:
-                temp_config = {"valor": 10, "unidad": "minutos"}
+                temp_config = {"valor": 30, "unidad": "minutos"}
             
-            valor = float(temp_config.get("valor", 10))
+            valor = float(temp_config.get("valor", 30))
             unidad = temp_config.get("unidad", "minutos")
             
             segundos_limite = valor * 60 if unidad == "minutos" else valor * 3600
+            # Minimo 30 minutos para evitar apagado rapido
+            if segundos_limite < 1800:
+                segundos_limite = 1800
             
             estado_foco = db.reference('estado_foco').get()
             if estado_foco == "ENCENDIDO":
@@ -473,16 +496,18 @@ def permanencia_inactividad_monitor():
                         nombre = perm.get('usuario', 'USUARIO NO REGISTRADO')
                         ahora_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         
+                        # Buscar el ultimo acceso abierto por este usuario
                         ref_accesos = db.reference('accesos')
-                        accesos = ref_accesos.order_by_child('codigo_usado').equal_to(uid).get()
+                        accesos = ref_accesos.order_by_child('metodo').equal_to(uid).get()
+                        if not accesos:
+                            # Fallback: buscar por metodo que contiene el UID
+                            accesos_all = ref_accesos.get() or {}
+                            accesos = {k: v for k, v in accesos_all.items() if uid in str(v.get('metodo', ''))}
                         if accesos:
                             for key, acc in reversed(list(accesos.items())):
-                                if acc.get('hora_salida') is None:
-                                    t_ingreso = datetime.datetime.strptime(acc['hora_ingreso'], "%Y-%m-%d %H:%M:%S")
-                                    minutos = int((datetime.datetime.now() - t_ingreso).total_seconds() / 60)
+                                if not acc.get('hora_salida') and acc.get('exitoso'):
                                     ref_accesos.child(key).update({
-                                        "hora_salida": ahora_str,
-                                        "tiempo_permanencia_min": minutos
+                                        "hora_salida": ahora_str
                                     })
                                     break
                         db.reference('monitoreo/permanencia/activo').set(False)
@@ -516,9 +541,10 @@ def mqtt_sensor_relay():
                 if val:
                     estado_actual["ultimo_movimiento_ts"] = time.time()
                     
-                    # Logica de encendido de luces
-                    if _es_horario_iluminacion():
-                        # Solo encender si lux < 100
+                    # Solo auto-encender luces si no hay override manual
+                    if tuya_manual_override and time.time() - tuya_last_manual_time < 30:
+                        print("[PIR] Movimiento detectado pero override manual activo, no se enciende foco")
+                    elif _es_horario_iluminacion():
                         lux_actual = db.reference('monitoreo/lux_actual').get()
                         if lux_actual is not None and float(lux_actual) < 100:
                             estado_foco = db.reference('estado_foco').get()
@@ -526,7 +552,6 @@ def mqtt_sensor_relay():
                                 print(f"[PIR] Movimiento detectado con baja luminosidad ({lux_actual} lux). Encendiendo foco.")
                                 db.reference('estado_foco').set("ENCENDIDO")
                     else:
-                        # Fuera de horario: Alerta de movimiento nocturna
                         db.reference('monitoreo/alerta_pir_nocturna').set(True)
 
             # SHELF SECURITY WIDGETS (CASILLEROS)
@@ -664,7 +689,9 @@ def main():
         threading.Thread(target=permanencia_inactividad_monitor, daemon=True).start()
         threading.Thread(target=mqtt_sensor_relay, daemon=True).start()
         threading.Thread(target=firebase_foco_listener, daemon=True).start()
-        threading.Thread(target=tuya_estado_sincronizador, daemon=True).start()
+        # Sync thread desactivado para evitar flickering del foco
+        # threading.Thread(target=tuya_estado_sincronizador, daemon=True).start()
+        print("[MAIN] Sync thread desactivado. Foco controlado solo desde dashboard/PIR.")
         app.run(host='0.0.0.0', port=5000, use_reloader=False)
     except KeyboardInterrupt:
         pass
