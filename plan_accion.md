@@ -202,8 +202,10 @@ PASO 3 ⏳ Verificar en Firebase
 PASO 4 ⏳ Eliminar tarjetas duplicadas
   → Pendiente de confirmar paso 3
 
-PASO 5 ⏳ Commit + push
-  → Pendiente
+PASO 5 ✅ Commit + push
+  → 4d34857 push a origin/main
+  → .gitignore excluye archivos sensibles
+  → GitHub push protection respetado
 ```
 
 ---
